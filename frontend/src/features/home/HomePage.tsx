@@ -28,7 +28,7 @@ import { cn } from "../../lib/cn";
 import { fmtAgo, fmtBytes, fmtDuration } from "../../lib/format";
 import { fmtBBoxShort } from "../../lib/geo";
 import { toggleTheme, useTheme } from "../../lib/theme";
-import { browserTimeZone, fmtDateTime } from "../../lib/tz";
+import { browserTimeZone, fmtClock, fmtDatePretty, fmtDateTime } from "../../lib/tz";
 import { DropZone } from "./DropZone";
 import { UploadProgressCard, useUploadView } from "./UploadProgress";
 import { caseNameFromFile, startUpload, uploadsStore } from "./uploads";
@@ -311,7 +311,9 @@ function CaseRow({ c, onOpen, onDelete }: { c: Case; onOpen: () => void; onDelet
           )
         ) : c.start_utc != null ? (
           <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-sm text-fg tnum">{fmtDateTime(c.start_utc, tz, { seconds: false })}</span>
+            <span className="truncate text-sm text-fg tnum" title={fmtDateTime(c.start_utc, tz)}>
+              {fmtDatePretty(c.start_utc, tz)} {fmtClock(c.start_utc, tz, false)}
+            </span>
             <SourceBadge source={c.start_utc_source} />
           </div>
         ) : (

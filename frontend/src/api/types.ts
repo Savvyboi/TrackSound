@@ -101,6 +101,8 @@ export type FlightSummary = {
   type: string | null;
   desc: string | null;
   engine: string | null;
+  /** ICAO Doc 8643 description: "LandPlane", "Helicopter", "Gyrocopter", "SeaPlane", ... */
+  category?: string | null;
   t_start_utc: number;
   t_end_utc: number;
   n_points: number;
@@ -301,6 +303,8 @@ export type EnfReference = {
   coverage: { t0_utc: number; t1_utc: number }[] | null;
   licence: string | null;
   url: string | null;
+  /** plain-language availability, e.g. "2021 to a few minutes ago" (not in API.md; sent by the server) */
+  available?: string | null;
 };
 
 export type EnfMatch = {

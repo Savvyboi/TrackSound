@@ -26,3 +26,10 @@ export function isTypingTarget(t: EventTarget | null): boolean {
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
+
+/** Controls where Space toggles state (checkboxes, switches, radios): leave Space to them. */
+export function isInteractiveTarget(t: EventTarget | null): boolean {
+  const el = t as HTMLElement | null;
+  if (!el || !el.closest) return false;
+  return !!el.closest('[role="checkbox"], [role="switch"], [role="radio"], [role="option"], [role="slider"]');
+}

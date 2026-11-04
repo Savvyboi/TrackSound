@@ -219,6 +219,14 @@ export function zoomToRange(t0: number, t1: number, pad = 0.25) {
   setView(t0 - span * pad, t1 + span * pad);
 }
 
+/** Bring time t into view: zoom to about `span` seconds around it when the view is much wider. */
+export function focusTime(t: number, span = 60) {
+  const { view } = ws.get();
+  const cur = view.t1 - view.t0;
+  if (cur > span * 3) setView(t - span * 0.35, t + span * 0.65);
+  else if (t < view.t0 || t > view.t1) centerOn(t);
+}
+
 export function centerOn(t: number) {
   const { view } = ws.get();
   const span = view.t1 - view.t0;

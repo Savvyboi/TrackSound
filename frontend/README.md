@@ -50,7 +50,7 @@ src/
     workspace/  page layout, header (case clock, jobs), resizable panes, shortcuts
     timeline/   spectrogram / thunder envelope / ENF trace canvas, playback
     map/        MapLibre map, basemaps, overlay layers, region drawing
-    setup/ aircraft/ lightning/ enf/ summary/   sidebar tabs
+    setup/ aircraft/ lightning/ enf/ alerts/ summary/   sidebar tabs
 ```
 
 ### Notes
@@ -66,12 +66,18 @@ src/
   jobs finish or fail, and refetches the data each job changed.
 - **Missing endpoints:** if the server answers 404/405/501 for a source's endpoint, that part
   of the UI shows "Not available yet" instead of failing.
+- **Flyover curves** are drawn as two "rails" either side of the fitted Doppler curve, so the
+  sweep itself stays visible between them. Fits that score like pure noise are hidden until
+  you ask for them.
+- **Heat maps** (aircraft search, lightning solve) are rasterized in the browser by
+  nearest-grid-point lookup, so multi-resolution grids render as one clean image layer.
 - **Basemaps:** OpenFreeMap vector styles (no key) and Esri World Imagery. Without internet
   the map falls back to a plain background (with country outlines from `/api/enf/grid-map`
-  when available); everything else keeps working.
+  when available); everything else keeps working. Aircraft icons are drawn on a canvas, so
+  no sprite server is needed.
 
 ### Keyboard shortcuts (workspace)
 
 Space play/pause · wheel zoom time · Shift+wheel zoom frequency · drag pan · `+` `-` `0`
 zoom · ← → pan · `B` box tool (fit a flyover) · `A`/`R` accept/reject the selected flyover ·
-`R` draw region · `1`–`5` tabs · `?` all shortcuts · Esc cancel.
+`C` show/hide fitted curves · `R` draw region · `1`–`6` tabs · `?` all shortcuts · Esc cancel.

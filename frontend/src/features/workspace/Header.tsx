@@ -22,7 +22,7 @@ export function Header() {
   const tz = caseTz(c);
   const rec = c.recording;
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-3">
+    <header className="flex h-12 shrink-0 items-center gap-3 overflow-hidden border-b border-line bg-surface px-3">
       <Link to="/" className="flex items-center gap-1 rounded-md py-1 pr-1.5 pl-0.5 text-fg-muted hover:bg-surface-3 hover:text-fg" data-tip="All cases">
         <ChevronLeft className="size-4" />
         <LogoMark className="size-6" />
@@ -167,7 +167,7 @@ function CaseClock() {
   return (
     <button
       onClick={() => setTab("setup")}
-      className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-3"
+      className="flex min-w-0 shrink-0 items-center gap-2 rounded-md px-1.5 py-1 whitespace-nowrap hover:bg-surface-3"
       data-tip={`Recording started ${fmtDatePretty(c.start_utc, tz)} ${fmtClock(c.start_utc, tz)} ${tzAbbr(c.start_utc, tz)} (${fmtClock(c.start_utc, "UTC")} UTC)`}
     >
       <Clock3 className="size-3.5 shrink-0 text-accent" />

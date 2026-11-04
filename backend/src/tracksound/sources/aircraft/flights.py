@@ -289,8 +289,10 @@ def geojson(traces: list[Trace], bbox: dict | None = None, t0: float | None = No
     bbox padded by pad_m (flights can cross a continent; the map only needs the region)."""
     from ...physics import pad_bbox
     box = pad_bbox(bbox, pad_m) if bbox else None
+    types = aircraft_types()
     feats = []
     for i, tr in enumerate(traces):
+        row = types.types.get(tr.typ or "") if types else None
         keep = np.isfinite(tr.lat) & np.isfinite(tr.lon)
         if box:
             keep &= (tr.lat >= box["lat_min"]) & (tr.lat <= box["lat_max"]) & (tr.lon >= box["lon_min"]) & (tr.lon <= box["lon_max"])
@@ -319,6 +321,7 @@ def geojson(traces: list[Trace], bbox: dict | None = None, t0: float | None = No
             coords = np.round(np.stack([tr.lon[sel], tr.lat[sel], alt], -1), 5).tolist()
             feats.append({"type": "Feature", "geometry": {"type": "LineString", "coordinates": coords},
                           "properties": {"idx": i, "icao": tr.icao, "reg": tr.reg, "type": tr.typ, "desc": tr.desc,
+                                         "category": row["AircraftDescription"] if row else None,
                                          "t_start_utc": float(tr.t[sel[0]]), "t_end_utc": float(tr.t[sel[-1]]),
                                          "times": np.round(tr.t[sel], 1).tolist()}})
     return {"type": "FeatureCollection", "features": feats}

@@ -34,7 +34,9 @@ def run(storm, onsets, region, flashes=(), **kw):
 def check_doc(res):
     assert set(res) == {"mode", "best", "candidates", "heat", "matches", "flash_matches", "ranges", "notes"}
     assert set(res["best"]) == {"lat", "lon", "start_utc", "score", "n_matched", "rms_s", "uncertainty_m"}
-    assert 0 < len(res["heat"]) <= 20000 and set(res["heat"][0]) == {"lat", "lon", "score"}
+    assert 0 < len(res["heat"]) <= 20000 and set(res["heat"][0]) == {"lat", "lon", "score", "cell_m"}
+    cells = sorted({h["cell_m"] for h in res["heat"]})
+    assert len(cells) >= 2 and cells[0] <= 250.0 + 1e-6          # a coarse grid plus finer cells near the peaks
     assert res["candidates"][0]["score"] == pytest.approx(res["best"]["score"], abs=1e-3)
     for m in res["matches"]:
         assert set(m) == {"onset_id", "strike_id", "residual_s", "distance_m"} and m["onset_id"] != "lo_rej"
@@ -98,9 +100,9 @@ def test_unaccepted_candidates_are_used_with_a_note():
 
 def test_bad_input():
     storm, onsets, region = scenario()
-    with pytest.raises(ValueError, match="no thunder onsets"):
+    with pytest.raises(ValueError, match="no onsets"):
         solver.solve([], [], storm.catalogue(), c=C, duration_s=900, region=region)
-    with pytest.raises(ValueError, match="no strikes"):
+    with pytest.raises(ValueError, match="no events"):
         solver.solve(onsets, [], [], c=C, duration_s=900, region=region)
     # no strike anywhere near the region: an empty result, not an error
     far = square_bbox(storm.lat + 3.0, storm.lon, 20000.0)
@@ -137,10 +139,18 @@ def test_dense_storm_with_coarse_catalogue_is_reported_as_ambiguous():
     """~30 strikes a minute with 4 km errors: every onset fits several strikes anywhere nearby."""
     storm = synth.make_storm(seed=8, sigma_m=4000.0, n_strikes=600, c=C, kind="flash", spread_km=12.0)
     rng = np.random.default_rng(8)
+    heard = rng.choice(storm.onset_times(), size=30, replace=False)        # a user's 30 clearest onsets
     onsets = [{"id": f"lo_{i}", "t": t + rng.normal(0, 0.1), "sigma_s": 0.2, "status": "accepted",
-               "origin": "detected"} for i, t in enumerate(storm.onset_times())]
+               "origin": "manual"} for i, t in enumerate(sorted(heard))]
     region = square_bbox(storm.lat, storm.lon, 25000.0)
     res = solver.solve(onsets, [], storm.catalogue(), c=C, duration_s=storm.duration_s, region=region,
                        start_utc=storm.start_utc)
     assert any("not distinctive" in n for n in res["notes"])
     assert res["best"]["uncertainty_m"] > 10000
+
+
+def test_exact_start_and_no_region():
+    storm, onsets, _ = scenario(seed=3)
+    res, err, dT = run(storm, onsets, None, start_utc=storm.start_utc, start_tol_s=0.0)
+    assert res["mode"] == "known_start" and abs(dT) < 0.02 and err < 1000
+    assert any("no search region" in n for n in res["notes"])

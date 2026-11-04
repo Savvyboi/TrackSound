@@ -13,7 +13,8 @@ import {
 import { Crosshair, Layers as LayersIcon, Map as MapIcon, SquareDashed, WifiOff, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { usePatchCase, useEnf, useFlightSet, useFlightsGeo, useGridMap, useLightning, useSearch, useSolve, useStrikes } from "../../api/queries";
+import { errorMessage } from "../../api/client";
+import { useAlerts, usePatchCase, useEnf, useFlightSet, useFlightsGeo, useGridMap, useLightning, useSearch, useSolve, useStrikes } from "../../api/queries";
 import type { BBox, FlightsGeoJSON } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Switch } from "../../components/ui/form";
@@ -29,7 +30,7 @@ import { fmtClock } from "../../lib/tz";
 import { toggleLayer, useWs, ws, type Layers } from "../../state/workspace";
 import { caseC, caseDuration, caseTz, useCaseData } from "../workspace/caseContext";
 import { BASEMAPS, isDarkBasemap, styleFor, type BasemapId } from "./basemaps";
-import { EMPTY, candidateGeometry, heatFC, heatSpacing, positionAt, r0For, solveGeometry, strikesFC } from "./geometry";
+import { EMPTY, candidateGeometry, heatImage, positionHeadingAt, solveGeometry, strikesFC, withCategories } from "./geometry";
 import { INTERACTIVE_LAYERS, newSyncState, syncOverlays, type OverlayData } from "./layers";
 import { registerMap } from "./registry";
 
@@ -63,6 +64,9 @@ export function MapPanel() {
   const checked = useWs((s) => s.checkedEventIds);
   const flightsDuringOnly = useWs((s) => s.flightsDuringOnly);
   const patch = usePatchCase(c.id);
+  // stable handle for map event handlers (the mutation object changes every render)
+  const patchRef = useRef(patch.mutate);
+  patchRef.current = patch.mutate;
 
   const setBasemap = (b: BasemapId) => {
     setBasemapState(b);
@@ -82,6 +86,14 @@ export function MapPanel() {
   const solve = useSolve(c.id, solveId);
   const enf = useEnf(c.id);
   const gridMap = useGridMap(layers.enfGrid || effective === "plain");
+  const alerts = useAlerts(c.id, tab === "alerts");
+  const alertId = useWs((s) => s.alertId);
+
+  // flights with a helicopter flag (category comes from the flight set, not the GeoJSON)
+  const flightsFC = useMemo(() => {
+    const cats = new Map((flightSet.data?.flights ?? []).map((f) => [f.idx, f.category]));
+    return withCategories(flights.data, cats);
+  }, [flights.data, flightSet.data]);
 
   const cand = useMemo(() => {
     const s = search.data;
@@ -89,14 +101,19 @@ export function MapPanel() {
     return s.candidates.find((x) => x.rank === rank) ?? null;
   }, [search.data, rank]);
 
+  // heat maps are rasterized once per result (max score per pixel at the finest grid)
+  const aHeatImg = useMemo(() => {
+    const spacing = Number((search.data?.request as { spacing_m?: number } | undefined)?.spacing_m) || (search.data?.mode === "refine" ? 50 : 200);
+    return heatImage(search.data?.heat, spacing);
+  }, [search.data]);
+  const lHeatImg = useMemo(() => {
+    const spacing = Number((solve.data?.request as { spacing_m?: number } | undefined)?.spacing_m) || 250;
+    return heatImage(solve.data?.heat, spacing);
+  }, [solve.data]);
+
   const overlay: OverlayData = useMemo(() => {
     const sgeo = solveGeometry(solve.data, strikes.data?.strikes);
-    const cg = candidateGeometry(cand, flights.data, caseC(c));
-    const heat = search.data?.heat;
-    const lheat = solve.data?.heat;
-    const reqSpacing = Number((search.data?.request as { spacing_m?: number } | undefined)?.spacing_m) || (search.data?.mode === "refine" ? 50 : 200);
-    const lat = c.region ? (c.region.lat_min + c.region.lat_max) / 2 : (heat?.[0]?.lat ?? 40);
-    const lSpacing = Number((solve.data?.request as { spacing_m?: number } | undefined)?.spacing_m) || 250;
+    const cg = candidateGeometry(cand, flightsFC, caseC(c));
     return {
       dark,
       land: effective === "plain" ? ((gridMap.data as unknown as OverlayData["land"]) ?? null) : null,
@@ -104,16 +121,14 @@ export function MapPanel() {
       enfNominal: enf.data?.analysis?.nominal_hz ?? null,
       region: c.region && validBBox(c.region) ? { type: "FeatureCollection", features: [bboxPolygon(c.region)] } : EMPTY,
       regionDraft: EMPTY,
-      aHeat: heatFC(heat),
-      aHeatR0: r0For(heatSpacing(heat, reqSpacing), lat),
-      flights: (flights.data as unknown as OverlayData["flights"]) ?? EMPTY,
-      flightsAttribution: flightSet.data?.attribution || "Flights: adsb.lol (ODbL)",
+      aHeat: aHeatImg,
+      flights: (flightsFC as unknown as OverlayData["flights"]) ?? EMPTY,
+      flightsAttribution: haveFlights && layers.flights ? flightSet.data?.attribution || "Flights: adsb.lol (ODbL)" : "",
       flightHl: cand ? cand.flights.map((f) => f.flight_idx) : [],
       flightSel: flightIdx,
       candLinks: cg.links,
       candCpa: cg.cpa,
-      lHeat: heatFC(lheat),
-      lHeatR0: r0For(heatSpacing(lheat, lSpacing), lat),
+      lHeat: lHeatImg,
       ranges: sgeo.ranges,
       lMatch: sgeo.lMatch,
       strikes: strikesFC(strikes.data?.strikes, sgeo.matched),
@@ -131,7 +146,7 @@ export function MapPanel() {
         hoverAc: layers.flights,
       },
     };
-  }, [dark, effective, gridMap.data, enf.data, c, search.data, flights.data, flightSet.data, cand, flightIdx, solve.data, strikes.data, layers]);
+  }, [dark, effective, gridMap.data, enf.data, c, search.data, flightsFC, flightSet.data, haveFlights, cand, flightIdx, solve.data, strikes.data, layers, aHeatImg, lHeatImg]);
 
   const overlayRef = useRef(overlay);
   overlayRef.current = overlay;
@@ -165,6 +180,10 @@ export function MapPanel() {
       "bottom-right",
     );
     map.touchZoomRotate.disableRotation();
+    // some hosted styles reference sprite images they don't ship: fill them with a blank pixel
+    map.on("styleimagemissing", (e: { id: string }) => {
+      if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+    });
     map.on("style.load", () => {
       styleOk.current = true;
       styleReady.current = true;
@@ -260,7 +279,7 @@ export function MapPanel() {
       const s = ws.get();
       const t = s.hoverT ?? (s.playback.state !== "idle" ? s.playback.t : null);
       const start = c.start_utc;
-      const fc = flights.data as FlightsGeoJSON | undefined;
+      const fc = flightsFC as FlightsGeoJSON | undefined;
       const key = t == null || start == null || !fc ? null : Math.round(t * 2);
       if (key === last) return;
       last = key;
@@ -273,13 +292,18 @@ export function MapPanel() {
       const utc = start + t;
       const features = [];
       for (const f of fc.features) {
-        const p = positionAt(f, utc);
-        if (p) features.push({ type: "Feature", properties: { reg: f.properties.reg ?? f.properties.icao }, geometry: { type: "Point", coordinates: p } });
+        const p = positionHeadingAt(f, utc);
+        if (p)
+          features.push({
+            type: "Feature",
+            properties: { reg: f.properties.reg ?? f.properties.icao, bearing: p[2], heli: (f.properties as { heli?: boolean }).heli === true },
+            geometry: { type: "Point", coordinates: [p[0], p[1]] },
+          });
       }
       src.setData({ type: "FeatureCollection", features });
     };
     return ws.subscribe(update);
-  }, [flights.data, c.start_utc, styleGen]);
+  }, [flightsFC, c.start_utc, styleGen]);
 
   // ---- region drawing and clicks ------------------------------------------------------------
   const [clickAt, setClickAt] = useState<{ lng: number; lat: number } | null>(null);
@@ -319,9 +343,9 @@ export function MapPanel() {
       draft(null);
       if (b.lat_max - b.lat_min < 1e-4 || b.lon_max - b.lon_min < 1e-4) return;
       ws.set({ mapTool: "none" });
-      patch.mutate(
+      patchRef.current(
         { region: b },
-        { onError: (err) => toast({ tone: "error", title: "Could not save the region", body: String(err) }) },
+        { onError: (err) => toast({ tone: "error", title: "Could not save the region", body: errorMessage(err) }) },
       );
     };
     const click = (e: MapMouseEvent) => {
@@ -355,7 +379,7 @@ export function MapPanel() {
       map.doubleClickZoom.enable();
       canvas.style.cursor = "";
     };
-  }, [mapTool, patch]);
+  }, [mapTool]);
 
   // hover tooltips for flights and strikes
   useEffect(() => {
@@ -424,11 +448,28 @@ export function MapPanel() {
       const b = solve.data.best;
       items.push({ id: `lbest-${solve.data.id}`, lng: b.lon, lat: b.lat, kind: "lightning", label: "", active: true, title: "Lightning solve: best point" });
     }
+    if (tab === "alerts") {
+      for (const h of alerts.data?.headers ?? []) {
+        for (const l of h.locations) {
+          if (l.lat == null || l.lon == null) continue;
+          items.push({
+            id: `alert-${h.id}-${l.code}`,
+            lng: l.lon,
+            lat: l.lat,
+            kind: "alert",
+            label: h.event,
+            active: h.id === alertId,
+            title: `${h.event_name}: ${l.county ?? l.fips}${l.state ? `, ${l.state}` : ""} (county centre)`,
+            onClick: () => ws.set({ alertId: h.id }),
+          });
+        }
+      }
+    }
     if (pickPoint && (tab === "aircraft" || mapTool === "pick-point")) {
       items.push({ id: "pick", lng: pickPoint.lon, lat: pickPoint.lat, kind: "pick", label: "", active: true, title: "Known point to check" });
     }
     return items;
-  }, [layers.candidates, layers.lightning, search.data, rank, solve.data, pickPoint, tab, mapTool]);
+  }, [layers.candidates, layers.lightning, search.data, rank, solve.data, pickPoint, tab, mapTool, alerts.data, alertId]);
   useMarkers(mapRef, markerItems);
 
   // close the click popup when its preconditions go away
@@ -473,7 +514,7 @@ export function MapPanel() {
           </button>
         </div>
       )}
-      <Legend overlay={overlay} hasSearchHeat={!!search.data?.heat?.length} hasSolve={!!solve.data} esri={effective === "satellite"} />
+      <Legend overlay={overlay} hasSearchHeat={!!search.data?.heat?.length} hasSolve={!!solve.data?.heat?.length} esri={effective === "satellite"} />
       {clickAt && mapRef.current && (
         <ClickPopup map={mapRef.current} at={clickAt} onClose={() => setClickAt(null)}>
           <div className="w-[220px]">
@@ -585,7 +626,7 @@ function MapToolbar({ basemap, setBasemap, effective, hasGrid }: { basemap: Base
 function Legend({ overlay, hasSearchHeat, hasSolve, esri }: { overlay: OverlayData; hasSearchHeat: boolean; hasSolve: boolean; esri: boolean }) {
   const rows: ReactNode[] = [];
   const v = overlay.vis;
-  if ((v.aHeat && hasSearchHeat) || (v.lSolve && hasSolve && overlay.lHeat.features.length)) {
+  if ((v.aHeat && hasSearchHeat) || (v.lSolve && hasSolve)) {
     rows.push(
       <div key="heat" className="flex items-center gap-2">
         <span className="w-[54px] text-fg-muted">Score</span>
@@ -623,10 +664,16 @@ function Legend({ overlay, hasSearchHeat, hasSolve, esri }: { overlay: OverlayDa
     );
   }
   if (v.flights && overlay.flights.features.length) {
+    const nHeli = overlay.flights.features.filter((f) => (f.properties as { heli?: boolean } | null)?.heli).length;
     rows.push(
       <div key="fl" className="flex items-center gap-2">
         <span className="w-[54px] text-fg-muted">Flights</span>
         <span className="text-fg-faint tnum">{overlay.flights.features.length} tracks</span>
+        {nHeli > 0 && (
+          <span className="flex items-center gap-1">
+            <span className="h-0.5 w-3 rounded bg-[#f0abfc]" /> {nHeli} helicopter{nHeli > 1 ? "s" : ""}
+          </span>
+        )}
         {overlay.flightHl.length > 0 && (
           <span className="flex items-center gap-1">
             <span className="h-0.5 w-3 rounded bg-[#67e8f9]" /> heard by candidate
@@ -649,7 +696,7 @@ type MarkerItem = {
   id: string;
   lng: number;
   lat: number;
-  kind: "cand" | "lightning" | "pick";
+  kind: "cand" | "lightning" | "pick" | "alert";
   label: string;
   active: boolean;
   best?: boolean;
@@ -665,6 +712,10 @@ function markerEl(m: MarkerItem): HTMLElement {
     el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 5px;border-radius:999px;font:600 11px Inter Variable,Inter,system-ui;cursor:pointer;
       background:${m.active ? "#67e8f9" : m.best ? "#0b0e13" : "rgba(11,14,19,0.85)"};color:${m.active ? "#06080c" : "#e6e9ef"};
       border:2px solid ${m.active ? "#ffffff" : m.best ? "#67e8f9" : "rgba(255,255,255,0.55)"};box-shadow:0 2px 8px rgba(0,0,0,.45)${m.active ? ",0 0 0 4px rgba(103,232,249,.25)" : ""}">${m.label}</div>`;
+  } else if (m.kind === "alert") {
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:4px;height:20px;padding:0 6px 0 4px;border-radius:999px;cursor:pointer;font:600 10px Inter Variable,Inter,system-ui;
+      background:${m.active ? "#fb923c" : "rgba(11,14,19,0.88)"};color:${m.active ? "#1a0d02" : "#fdba74"};border:1.5px solid ${m.active ? "#fff" : "#fb923c"};box-shadow:0 2px 8px rgba(0,0,0,.45)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4.9 16.1C1 12.2 1 5.8 4.9 1.9"/><path d="M7.8 4.7a6.14 6.14 0 0 0-.8 7.5"/><circle cx="12" cy="9" r="2"/><path d="M16.2 4.8c2 2 2.26 5.11.8 7.47"/><path d="M19.1 1.9a9.96 9.96 0 0 1 0 14.1"/><path d="M9.5 18h5"/><path d="m8 22 4-11 4 11"/></svg>${m.label}</div>`;
   } else if (m.kind === "lightning") {
     el.innerHTML = `<div style="width:26px;height:26px;border-radius:999px;background:#0b0e13;border:2px solid #facc15;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.45),0 0 0 4px rgba(250,204,21,.2)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="#facc15"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></div>`;

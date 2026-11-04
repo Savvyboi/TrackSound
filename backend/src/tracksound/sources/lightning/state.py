@@ -2,7 +2,7 @@
 
     onsets.json            ThunderOnset[]
     flashes.json           Flash[]
-    strikes.json           { set: StrikeSet, strikes: Strike[] }
+    strikes.json           { set: StrikeSet, strikes: Strike[] }  (catalogue events + manual ones)
     solves/index.json      LightningSolveSummary[] (newest first)
     solves/<id>.json       LightningSolve
     envelope.npz           cached thunder band envelopes (rebuilt when audio.wav changes)
@@ -97,6 +97,58 @@ def write_strikes(store: Store, cid: str, strike_set: dict, strikes: list[dict])
 
 def delete_strikes(store: Store, cid: str) -> None:
     store.delete_file(cid, STRIKES)
+
+
+MANUAL = "manual"
+
+
+def _with_manual(source: str, has_manual: bool) -> str:
+    parts = [p for p in source.split("+") if p and p != MANUAL]
+    if has_manual:
+        parts.append(MANUAL)
+    return "+".join(parts) or MANUAL
+
+
+def replace_catalogue(store: Store, cid: str, source: str, strikes: list[dict], t0_utc: float | None = None,
+                      t1_utc: float | None = None, bbox: dict | None = None) -> dict:
+    """Store a fetched or imported catalogue, keeping the user's manual events. Returns the StrikeSet.
+    Call with ``store.lock(cid)`` held."""
+    from .catalogue import strike_set
+    _, cur = read_strikes(store, cid)
+    manual = [x for x in cur if x.get("source") == MANUAL]
+    allx = sorted(strikes + manual, key=lambda x: x["t_utc"])
+    sset = strike_set(_with_manual(source, bool(manual)), allx, t0_utc, t1_utc, bbox)
+    if t0_utc is None and t1_utc is None and bbox is None:      # an import: describe the catalogue part only
+        sset = {**strike_set(_with_manual(source, bool(manual)), strikes), "count": len(allx)}
+    write_strikes(store, cid, sset, allx)
+    return sset
+
+
+def add_manual_strike(store: Store, cid: str, strike: dict) -> dict:
+    """Add one user-supplied event (source "manual"). Call with ``store.lock(cid)`` held."""
+    from .catalogue import strike_set
+    sset, cur = read_strikes(store, cid)
+    allx = sorted(cur + [strike], key=lambda x: x["t_utc"])
+    if sset is None:
+        sset = strike_set(MANUAL, allx)
+    else:
+        sset = {**sset, "source": _with_manual(sset["source"], True), "count": len(allx)}
+    write_strikes(store, cid, sset, allx)
+    return strike
+
+
+def delete_strike(store: Store, cid: str, sid: str) -> None:
+    """Remove one event. Call with ``store.lock(cid)`` held."""
+    sset, cur = read_strikes(store, cid)
+    if not any(x["id"] == sid for x in cur):
+        raise NotFound(sid)
+    rest = [x for x in cur if x["id"] != sid]
+    has_manual = any(x.get("source") == MANUAL for x in rest)
+    if not rest and (sset is None or sset["source"] == MANUAL):
+        delete_strikes(store, cid)
+        return
+    sset = {**(sset or {}), "source": _with_manual((sset or {}).get("source", MANUAL), has_manual), "count": len(rest)}
+    write_strikes(store, cid, sset, rest)
 
 
 # ---- solves ---------------------------------------------------------------------------------

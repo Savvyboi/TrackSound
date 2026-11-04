@@ -5,7 +5,7 @@ import { isActive, useStartJob } from "../../api/jobs";
 import { casePath, useAircraftEvents, useCaseJobs } from "../../api/queries";
 import type { AircraftEvent } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
-import { Checkbox, NumberInput } from "../../components/ui/form";
+import { Checkbox, NumberInput, Segmented } from "../../components/ui/form";
 import { Badge, EmptyState, ErrorNote, ProgressBar, Section, Skeleton } from "../../components/ui/misc";
 import { toast } from "../../components/ui/toast";
 import { cn } from "../../lib/cn";
@@ -14,6 +14,13 @@ import { useWs, ws, zoomToRange } from "../../state/workspace";
 import { STATUS_COLOR } from "../timeline/TimelineCanvas";
 import { recordingReady, useCaseData } from "../workspace/caseContext";
 import { eventNumbers, eventQuality, useAircraftActions } from "./actions";
+
+type PresetId = "prop" | "heli" | "custom";
+const PRESETS: { id: PresetId; label: string; tip: string; band?: [number, number]; harmonics: number }[] = [
+  { id: "prop", label: "Propeller", tip: "Blade-pass tone 60–300 Hz, fundamental only", band: [60, 300], harmonics: 1 },
+  { id: "heli", label: "Helicopter rotor", tip: "Main rotor 10–60 Hz with 3 harmonics", band: [10, 60], harmonics: 3 },
+  { id: "custom", label: "Custom", tip: "Choose the band and harmonics", harmonics: 1 },
+];
 
 export function toggleChecked(id: string) {
   const cur = ws.get().checkedEventIds;
@@ -36,9 +43,21 @@ export function EventsSection() {
   const actions = useAircraftActions(c.id);
   const startJob = useStartJob();
   const [showOpts, setShowOpts] = useState(false);
+  const [preset, setPreset] = useState<PresetId>("prop");
   const [band, setBand] = useState<[number, number]>([60, 300]);
   const [harmonics, setHarmonics] = useState(1);
   const [top, setTop] = useState(12);
+  const specLo = c.recording?.spectrogram?.f0 ?? 40;
+  const minBand = Math.max(10, Math.ceil(specLo));
+  const applyPreset = (p: PresetId) => {
+    setPreset(p);
+    const def = PRESETS.find((x) => x.id === p);
+    if (def?.band) {
+      setBand(def.band);
+      setHarmonics(def.harmonics);
+    }
+    if (p === "custom") setShowOpts(true);
+  };
   const [starting, setStarting] = useState(false);
   const showWeak = useWs((s) => s.showWeak);
   const setShowWeak = (f: (v: boolean) => boolean) => ws.set({ showWeak: f(ws.get().showWeak) });
@@ -79,26 +98,73 @@ export function EventsSection() {
         </IconButton>
       }
     >
+      <Segmented
+        className="mb-2.5 flex w-full"
+        size="sm"
+        value={preset}
+        onChange={applyPreset}
+        ariaLabel="Detection preset"
+        options={PRESETS.map((p) => ({
+          value: p.id,
+          label: p.label,
+          tip: p.id === "heli" && specLo > 15 ? "This recording's spectrogram starts at 40 Hz: upload it again to analyse helicopter rotors" : p.tip,
+          disabled: p.id === "heli" && specLo > 15,
+        }))}
+      />
       {showOpts && (
         <div className="mb-3 grid grid-cols-[1fr_1fr_64px_64px] items-end gap-2 rounded-lg border border-line bg-surface-2 p-2.5">
           <label className="flex flex-col gap-1 text-2xs text-fg-muted">
             Band from
-            <NumberInput value={band[0]} onCommit={(v) => v != null && setBand([v, band[1]])} min={40} max={440} suffix="Hz" allowEmpty={false} />
+            <NumberInput
+              value={band[0]}
+              onCommit={(v) => {
+                if (v == null) return;
+                setBand([v, band[1]]);
+                setPreset("custom");
+              }}
+              min={minBand}
+              max={440}
+              suffix="Hz"
+              allowEmpty={false}
+            />
           </label>
           <label className="flex flex-col gap-1 text-2xs text-fg-muted">
             to
-            <NumberInput value={band[1]} onCommit={(v) => v != null && setBand([band[0], v])} min={50} max={450} suffix="Hz" allowEmpty={false} />
+            <NumberInput
+              value={band[1]}
+              onCommit={(v) => {
+                if (v == null) return;
+                setBand([band[0], v]);
+                setPreset("custom");
+              }}
+              min={minBand + 5}
+              max={450}
+              suffix="Hz"
+              allowEmpty={false}
+            />
           </label>
           <label className="flex flex-col gap-1 text-2xs text-fg-muted">
             Harmonics
-            <NumberInput value={harmonics} onCommit={(v) => v != null && setHarmonics(Math.round(v))} min={1} max={4} step={1} allowEmpty={false} />
+            <NumberInput
+              value={harmonics}
+              onCommit={(v) => {
+                if (v == null) return;
+                setHarmonics(Math.round(v));
+                setPreset("custom");
+              }}
+              min={1}
+              max={4}
+              step={1}
+              allowEmpty={false}
+            />
           </label>
           <label className="flex flex-col gap-1 text-2xs text-fg-muted">
             Top N
             <NumberInput value={top} onCommit={(v) => v != null && setTop(Math.round(v))} min={1} max={100} step={1} allowEmpty={false} />
           </label>
           <p className="col-span-4 text-2xs leading-snug text-fg-faint">
-            The band is searched for the fundamental (blade-pass) tone. A narrower band is faster. Detection keeps accepted and manual flyovers.
+            The band is searched for the fundamental tone ({minBand}–450 Hz): propeller blade-pass is about 60–300 Hz, helicopter main rotors about 10–60 Hz with
+            several harmonics. A narrower band is faster. Detection keeps accepted and manual flyovers.
           </p>
         </div>
       )}
@@ -118,7 +184,7 @@ export function EventsSection() {
             {all.length ? "Detect again" : "Detect flyovers"}
           </Button>
           <span className="text-2xs text-fg-faint tnum">
-            {band[0]}–{band[1]} Hz · top {top}
+            {band[0]}–{band[1]} Hz · {harmonics} harm. · top {top}
           </span>
         </div>
       )}

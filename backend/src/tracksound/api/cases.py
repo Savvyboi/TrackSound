@@ -44,7 +44,7 @@ class CasePatch(BaseModel):
     timezone: str | None = None
     region: BBox | None = None
     start_utc: float | None = None
-    start_utc_source: Literal["user", "aircraft", "lightning", "enf"] | None = None
+    start_utc_source: Literal["user", "aircraft", "lightning", "enf", "alerts"] | None = None
     temperature_c: float | None = Field(default=None, ge=-60, le=60)
 
     @field_validator("date")

@@ -20,7 +20,7 @@ update it as decisions are made and results come in.
 13. [Validation](#13-validation)
 14. [Risks and limitations](#14-risks-and-limitations)
 15. [Responsible use](#15-responsible-use)
-16. [Open decisions](#16-open-decisions)
+16. [Decisions](#16-decisions)
 17. [References](#17-references)
 
 ---
@@ -163,12 +163,15 @@ One person can cover several of these roles early on.
 
 ### Not in v1
 
-- Accounts and multi-user hosting (planned for M4).
+- Accounts and hosting: TrackSound is local only (section 6).
 - Importing from URLs (YouTube etc.), because of terms-of-service and legal
   questions. File upload only.
-- Lightning and other sources. We design for them but don't build them.
 - Live streams or real-time processing.
-- Searching across multiple days or unknown dates.
+- Searching across multiple days or unknown dates for aircraft. ENF matching and
+  emergency-alert headers can supply the date and time when it is unknown.
+
+Beyond the original v1 scope, the first version also includes lightning, mains hum
+(ENF) and emergency-alert (EAS/SAME) sources (section 12).
 
 ## 5. User flow
 
@@ -422,69 +425,68 @@ pull request:
 
 ## 12. Roadmap
 
-Each milestone has exit criteria. There are no dates until M0's spikes are done.
+Status on 2026-11-04. Milestones M0–M3 of the original plan are done, in their
+local-only form; the hosting parts of M4 were dropped (section 6).
 
-### M0: Foundations and spikes
+### Done
 
-- Scaffold the repo (section 10): CI, Docker Compose, pre-commit, and a project
-  licence.
-- Reproduce dopplertrack's Oyster Bay result end to end in our environment, and
-  keep it as a golden regression test (nightly, not on every PR).
-- **Spike:** ingest one adsb.lol day into filtered Parquet. Record time, size and
-  peak memory.
-- **Spike:** a WebGL spectrogram viewer showing tiled 1-hour and 12-hour
-  spectrograms, to check rendering and memory.
-- **Decide:** job-queue library, basemap provider, licence.
-- **Exit:** the golden test passes, and the spike numbers are written into this
-  document.
+- **Foundations:** repo layout, CI, local server, JSON case store, in-process jobs, demo
+  cases.
+- **Flight data:** adsb.lol day download with a per-day cache, parsed in parallel
+  (about 2 minutes per day). Props and helicopters are kept, using Doc 8643.
+- **Recordings and events:**
+  - Upload, a 10–450 Hz spectrogram and a tiled viewer.
+  - Flyover detection with quality labels, manual box fitting, and curve overlays.
+  - Helicopter rotor presets.
+- **Searches:** blind, known-point and single-event, plus refine with extra events.
+  They run with progress, cancellation and a cost estimate, show the modelled curves on
+  the spectrogram, and give the implied start time. Margins and runner-ups are shown.
+- **Validation on real ADS-B days** ([results/validation.md](results/validation.md)):
+  - Oyster Bay: 39 m after refining.
+  - Eagle cam: 51 m.
+  - The audio was synthetic, so this is not yet a test on real microphones.
+- **Lightning:** thunder onsets, video flashes, GOES GLM and CSV catalogues, and a solver
+  that searches position and clock ([research/lightning.md](research/lightning.md)).
+  - Being extended to any known-time sharp event: USGS-listed blasts and sonic booms,
+    and user-entered events.
+- **Mains hum (ENF):**
+  - Hum extraction, 50/60 Hz detection and a country map.
+  - Grid-frequency references, built in and imported.
+  - Start-time matching ([research/enf.md](research/enf.md)).
+- **Emergency alerts (EAS/SAME):** decoding US alert headers gives counties and an issue
+  time ([research/alerts.md](research/alerts.md)).
+- **Research survey** of other techniques
+  ([research/audio-geolocation-techniques.md](research/audio-geolocation-techniques.md)).
 
-### M1: Flight data service
+### Next
 
-- The `ingest_adsb_day` job, the tile-partitioned store, `GET /flights`, the
-  Doc 8643 filter, and data attribution.
-- A map page: draw a region, pick a date, and see that day's prop flights with a
-  time slider.
-- **Exit:** after the first ingest, a 100 × 150 km region query returns in under
-  2 s.
-
-### M2: Recordings and events
-
-- Upload, the spectrogram job, the tile endpoint, and the spectrogram viewer.
-- The detection job, the events list, manual box-and-fit, curve overlays, and
-  accept/reject.
-- **Exit:** on the Oyster Bay clip, the UI's top two detections are the flyovers
-  dopplertrack finds, at about 2156 s and 3068 s.
-
-### M3: Search and results (MVP complete)
-
-- Searches in all three modes (blind, known-point, single event with known
-  time), with progress, cancel, and a cost estimate before running.
-- The results map (heat map, candidates, matched tracks) and the evidence panel
-  (modelled curves on the spectrogram, margins).
-- Refinement with extra events, the estimated start time, and exports.
-- **Exit:** both reference recordings are located through the UI to within
-  dopplertrack's published accuracy: about 150 m at Oyster Bay, and about 1 km
-  at the eagle cam with extra events.
-
-### M4: Hardening and hosting
-
-- Accounts, per-user quotas, retention and cleanup jobs, rate-limited ingestion,
-  logging and metrics.
-- Performance: tiled search across workers, CPA cache reuse, and profiling the
-  hot paths.
-- Optional: the in-browser spectrogram (privacy mode).
-- **Exit:** a hosted instance that runs several searches at once, plus a
-  self-hosting guide.
-
-### M5: Plugin refactor and lightning
-
-- A lightning research spike, following [research/lightning.md](research/lightning.md):
-  data access, thunder detection on real storm recordings, and an accuracy
-  budget.
-- Extract the `core` interfaces properly, now that a second source exists.
-- Score calibration, and combining aircraft and lightning evidence.
-- **Exit:** a storm recording at a known place is located from lightning alone
-  (km-level), and the result improves when aircraft evidence is added.
+1. **Our own ground-truth recordings.** This is the most important next step.
+   - Record 20+ clips: 30–60 minutes, outdoors, with GPS position and an accurate clock.
+     Use phones and dedicated recorders, near and far from airports.
+   - Measure the real success rate and publish failures as well as successes. Open
+     tools that tried this found the tonal method fails on most arbitrary clips (survey,
+     section 3.1).
+2. **Jets via the ground-reflection delay** (survey 3.3).
+   - Jets dominate traffic near airports and give broadband noise, not tones.
+   - Track the cepstral peak of the direct/reflected path difference and match it to
+     ADS-B tracks with jets kept.
+   - This needs the original sample rate, not the 4 kHz copy.
+3. **Calibrated scores and evidence fusion.**
+   - Turn each source's score into a likelihood: z-scores against decoy flights,
+     strikes or time shifts.
+   - Combine sources on one grid and one clock.
+   - The Summary tab currently shows the sources side by side.
+4. **More clock anchors** (survey 5.1): a siren-test rules table, and time signals.
+5. **Spikes from the survey:**
+   - ships vs AIS (US and Danish archives are free);
+   - bell-tower fingerprints vs Dove's Guide;
+   - trains vs open train-movement data.
+6. **Packaging:**
+   - ship the built UI inside the Python package, so users don't need Node;
+   - a one-command installer;
+   - optional in-browser spectrogram for privacy.
+7. **Performance:** split large searches into tiles across processes, and profile the
+   CPA and scoring hot paths (Numba or JAX).
 
 ## 13. Validation
 
@@ -510,6 +512,13 @@ Each milestone has exit criteria. There are no dates until M0's spikes are done.
   - Aim for 20+ clips across varied geography.
 - **What we report:** the error distribution, not only the best cases. Track the
   "right flight pair ranked first" rate and the score margin.
+- **Results so far:** see [results/validation.md](results/validation.md). These are real
+  ADS-B days with synthetic audio at the two reference points (39 m and 51 m), plus a
+  failure caused by the silence filter in a busy sky, which is now handled
+  automatically.
+- **Automated tests:** `backend/tests` covers the API, the aircraft pipeline on a
+  synthetic world, helicopters, flight-archive parsing, lightning, ENF and alerts.
+  CI runs it on every push.
 
 ## 14. Risks and limitations
 
@@ -519,8 +528,10 @@ Each milestone has exit criteria. There are no dates until M0's spikes are done.
 | Recording quality: phone high-pass filters, noise suppression, AGC, wind, lossy codecs | Faint or missing curves | Detection-quality indicator; guidance on what works; test across devices and codecs |
 | Edited, sped-up or stitched clips | The single-clock assumption breaks | Warn on discontinuities; per-segment analysis later |
 | Thin margins (4.9 % and 2.5 % on the reference recordings) | A wrong flight pair can look right | Always show runner-ups and margins; encourage 3+ events; calibrated confidence later |
+| Busy skies (flight schools, airports) | Many coincidental flight pairs; the "silence" filter rejects the true point when other flyovers lie between the chosen events | Automatic: the filter is switched off when other flyovers were detected in between; the UI suggests adjacent events |
+| Real clips often show no tonal flyovers (survey 3.1: open tools found most arbitrary clips fail) | No result at all | Publish failure rates; add jets via ground reflection; combine with ENF, alerts and lightning |
 | Poor geometry (high or overhead passes) | km-level uncertainty | Show uncertainty spread on the map; suggest extra events |
-| Compute cost: blind searches took 8–19 min on a laptop for 100–130 km regions, scaling with area × flights | Slow and expensive when hosted | Cost estimate before running, limits, tiled parallel search, CPA caching |
+| Compute cost: blind searches took 8–19 min on a laptop for 100–130 km regions, scaling with area × flights | Slow on small machines | Cost estimate before running; start with a smaller region; tiled parallel search later |
 | Dependence on adsb.lol releases on GitHub | Availability, bandwidth, policy | Ingest each day once and cache; keep `FlightSource` pluggable |
 | dopplertrack API churn | Breakage on upgrade | Pin the version, keep a wrapper layer, golden tests |
 | Date must be known | No search without it | v1 needs a date; multi-day search is a later feature |
@@ -544,19 +555,19 @@ your own recordings leak your location). Design choices:
   whether it leaks your location. Later, a scrub tool could notch the detected
   aircraft tones out of the audio.
 
-## 16. Open decisions
+## 16. Decisions
 
-| # | Decision | Recommendation | Why |
+| # | Decision | Status | Why |
 |---|---|---|---|
-| 1 | Use dopplertrack as a dependency, fork it, or port it | Pinned dependency plus upstream contributions | Validated, MIT; avoids divergence |
-| 2 | Where audio is processed | Server in v1; browser privacy mode in M4 | Fastest route to a working MVP |
-| 3 | Hosting model | Self-hostable first, public hosted instance later | Compute and data cost, abuse risk |
-| 4 | Frontend framework | React + TypeScript | deck.gl and MapLibre ecosystem |
-| 5 | Job queue | arq + Redis | Simple, async, fits FastAPI |
-| 6 | Flight store | GeoParquet + DuckDB | No DB server, fast region scans; revisit PostGIS if needed |
-| 7 | Project licence | Decide in M0 (MIT or Apache-2.0 for code) | ODbL obligations apply to data regardless |
-| 8 | URL import (YouTube etc.) | Not in v1 | Terms of service and legal risk |
-| 9 | Flight-store retention when hosted | Ingest on demand, evict least recently used | Real size unknown until the M0 spike |
+| 1 | Use dopplertrack as a dependency, fork it, or port it | **Decided:** pinned dependency (0.2.0); our additions live in a wrapper (section 11) | Validated physics; MIT; avoids divergence |
+| 2 | Where audio is processed | **Decided:** on the user's machine (local server) | Local only: nothing leaves the computer |
+| 3 | Hosting model | **Decided:** local only, no hosted service | Privacy, cost, abuse risk |
+| 4 | Frontend framework | **Decided:** React + TypeScript + MapLibre, with no deck.gl | Fewer dependencies; MapLibre layers were enough |
+| 5 | Job queue | **Decided:** in-process threads | One user per server; no Redis needed |
+| 6 | Flight store | **Decided for now:** per-day, per-region NPZ cache of dopplertrack traces | Simple and fast enough; GeoParquet + DuckDB if regions get large |
+| 7 | Project licence | **Open** (MIT or Apache-2.0 for code) | ODbL obligations apply to adsb.lol data regardless |
+| 8 | URL import (YouTube etc.) | **Not planned** | Terms of service and legal risk |
+| 9 | Gunshot ranging and multi-recording TDOA | **Deferred** until a responsible-use review | They locate a source rather than the recording, and are sensitive |
 
 ## 17. References
 

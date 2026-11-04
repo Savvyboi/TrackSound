@@ -30,7 +30,7 @@ import { cn } from "../../lib/cn";
 import { fmtAgo, fmtDist, fmtDuration, fmtInt, fmtLatLonPretty, fmtNum, fmtRec, fmtSigned } from "../../lib/format";
 import { circleRing } from "../../lib/geo";
 import { fmtClock, fmtDateTime, fmtUtc, fromUtcInput, toUtcInput, utcDayRange } from "../../lib/tz";
-import { centerOn, focusMap, useWs, ws } from "../../state/workspace";
+import { focusMap, focusTime, useWs, ws } from "../../state/workspace";
 import { STATUS_COLOR } from "../timeline/TimelineCanvas";
 import { caseDuration, caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
 import { useLightningActions } from "./actions";
@@ -245,7 +245,7 @@ function OnsetsSection() {
               }
               onSelect={() => {
                 ws.set({ onsetId: o.id, flashId: null });
-                centerOn(o.t);
+                focusTime(o.t, 60);
               }}
               onTime={(t) => a.patchOnset(o.id, { t })}
               onStatus={(s) => a.patchOnset(o.id, { status: s })}
@@ -300,7 +300,7 @@ function FlashesSection() {
               }
               onSelect={() => {
                 ws.set({ flashId: f.id, onsetId: null });
-                centerOn(f.t);
+                focusTime(f.t, 60);
               }}
               onTime={(t) => a.patchFlash(f.id, { t })}
               onStatus={(s) => a.patchFlash(f.id, { status: s })}

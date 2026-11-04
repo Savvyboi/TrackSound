@@ -1,11 +1,12 @@
-import { Activity, ClipboardList, Plane, Settings2, Zap } from "lucide-react";
+import { Activity, ClipboardList, Plane, RadioTower, Settings2, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import { isActive, jobSource } from "../../api/jobs";
-import { useCaseJobs, useEnf, useLightning, useSearches } from "../../api/queries";
+import { useAlerts, useCaseJobs, useEnf, useLightning, useSearches } from "../../api/queries";
 import { Spinner } from "../../components/ui/misc";
 import { cn } from "../../lib/cn";
 import { setTab, useWs, type Tab } from "../../state/workspace";
 import { AircraftTab } from "../aircraft/AircraftTab";
+import { AlertsTab } from "../alerts/AlertsTab";
 import { EnfTab } from "../enf/EnfTab";
 import { LightningTab } from "../lightning/LightningTab";
 import { SetupTab } from "../setup/SetupTab";
@@ -17,7 +18,8 @@ const TAB_META: Record<Tab, { label: string; icon: ReactNode; key: string }> = {
   aircraft: { label: "Aircraft", icon: <Plane />, key: "2" },
   lightning: { label: "Lightning", icon: <Zap />, key: "3" },
   enf: { label: "Mains hum", icon: <Activity />, key: "4" },
-  summary: { label: "Summary", icon: <ClipboardList />, key: "5" },
+  alerts: { label: "Alerts", icon: <RadioTower />, key: "5" },
+  summary: { label: "Summary", icon: <ClipboardList />, key: "6" },
 };
 
 export function Sidebar() {
@@ -27,12 +29,14 @@ export function Sidebar() {
   const searches = useSearches(c.id);
   const lightning = useLightning(c.id);
   const enf = useEnf(c.id);
+  const alerts = useAlerts(c.id);
   const busy = (src: string) => jobs.some((j) => jobSource(j.kind) === src);
   const status: Record<Tab, "busy" | "done" | "todo" | null> = {
     setup: !c.date || !c.region ? "todo" : null,
     aircraft: busy("aircraft") ? "busy" : searches.data?.some((s) => s.best) ? "done" : null,
     lightning: busy("lightning") ? "busy" : lightning.data?.solves?.some((s) => s.best) ? "done" : null,
     enf: busy("enf") ? "busy" : enf.data?.matches?.some((m) => m.best) ? "done" : null,
+    alerts: busy("alerts") ? "busy" : alerts.data?.headers?.length ? "done" : null,
     summary: null,
   };
 
@@ -50,7 +54,7 @@ export function Sidebar() {
               onClick={() => setTab(t)}
               data-tip={`${m.label} (${m.key})`}
               className={cn(
-                "relative flex flex-1 flex-col items-center gap-1 rounded-t-md px-1 pt-2 pb-2 text-2xs font-medium transition-colors [&_svg]:size-4",
+                "relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-t-md px-0.5 pt-2 pb-2 text-2xs font-medium transition-colors [&_svg]:size-4",
                 tab === t ? "text-fg" : "text-fg-faint hover:bg-surface-2 hover:text-fg-muted",
               )}
             >
@@ -77,6 +81,7 @@ export function Sidebar() {
         {tab === "aircraft" && <AircraftTab />}
         {tab === "lightning" && <LightningTab />}
         {tab === "enf" && <EnfTab />}
+        {tab === "alerts" && <AlertsTab />}
         {tab === "summary" && <SummaryTab />}
       </div>
     </aside>

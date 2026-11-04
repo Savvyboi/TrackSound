@@ -1,4 +1,5 @@
-"""Lightning source API: thunder onsets and video flashes vs lightning catalogues (docs/API.md)."""
+"""Lightning source API (docs/API.md): onsets of thunder or other bangs, and video flashes, matched to
+catalogues of known-time events (GLM lightning, USGS blasts/booms/earthquakes, CSV, manual events)."""
 from __future__ import annotations
 
 import time
@@ -10,13 +11,16 @@ from pydantic import BaseModel, Field
 from ..deps import get_jobs, get_store
 from ..jobs import JobContext, JobManager
 from ..physics import case_sound_speed, pad_bbox
-from ..sources.lightning import catalogue, flashes as flash_mod, glm, solve as solver, state, thunder
+from ..sources.lightning import catalogue, flashes as flash_mod, glm, solve as solver, state, thunder, usgs
+from ..sources.lightning.events import canonical_kind
 from ..store import Store, new_id
 from .cases import BBox
 
 router = APIRouter(prefix="/api", tags=["lightning"])
 
-MAX_FETCH_S = 6 * 3600.0
+MAX_FETCH_S = 6 * 3600.0                 # GLM: 20 s files, ~60 MB per hour
+MAX_FETCH_USGS_S = 31 * 86400.0          # USGS events are sparse
+MANUAL_SIGMA_M = 250.0
 FETCH_PAD_M = 50_000.0
 MAX_CSV_BYTES = 200 * 1024 * 1024
 Status = Literal["candidate", "accepted", "rejected"]
@@ -52,11 +56,20 @@ class FlashPatch(BaseModel):
 
 
 class StrikeFetch(BaseModel):
-    source: Literal["glm"] = "glm"
-    satellite: str = "auto"
+    source: Literal["glm", "usgs"] = "glm"
+    satellite: str = "auto"                       # glm only
+    event_types: list[str] | None = None          # usgs only; default blasts, explosions, sonic booms
     t0_utc: float
     t1_utc: float
     bbox: BBox | None = None
+
+
+class StrikeCreate(BaseModel):
+    t_utc: float
+    lat: float = Field(ge=-90.0, le=90.0)
+    lon: float = Field(ge=-180.0, le=180.0)
+    sigma_m: float | None = Field(None, gt=0.0, le=200_000.0)
+    kind: str | None = Field(None, max_length=32)
 
 
 class SolveBody(BaseModel):
@@ -249,29 +262,41 @@ def fetch_strikes(case_id: str, body: StrikeFetch, store: Store = Depends(get_st
     case = store.get_case(case_id)
     if body.t1_utc <= body.t0_utc:
         raise HTTPException(400, "t1_utc must be after t0_utc")
-    if body.t1_utc - body.t0_utc > MAX_FETCH_S:
+    if body.source == "glm" and body.t1_utc - body.t0_utc > MAX_FETCH_S:
         raise HTTPException(400, "at most 6 hours of GLM data per fetch")
+    if body.source == "usgs" and body.t1_utc - body.t0_utc > MAX_FETCH_USGS_S:
+        raise HTTPException(400, "at most 31 days of USGS events per fetch")
     if body.bbox is not None:
         bbox = body.bbox.model_dump()
     elif case.get("region"):
         bbox = pad_bbox(case["region"], FETCH_PAD_M)
     else:
         raise HTTPException(400, "set the case region or pass a bbox")
-    sats = glm.satellites_for(bbox, body.t0_utc, body.t1_utc, body.satellite)   # ValueError -> 400
+    if body.source == "glm":
+        sats = glm.satellites_for(bbox, body.t0_utc, body.t1_utc, body.satellite)   # ValueError -> 400
+    else:
+        usgs.expand_types(body.event_types)                                        # ValueError -> 400
     _no_running(jobs, case_id, "lightning.fetch_strikes")
     cache = store.settings.cache_dir / "glm"
 
     def work(ctx: JobContext):
-        ctx.progress(0.01, f"Listing GLM files (GOES-{sats[0][1:]})")
-        strikes, info = glm.fetch_flashes(cache, bbox, body.t0_utc, body.t1_utc, body.satellite, progress=ctx.progress)
-        source = "glm-" + "+".join(info["satellites"])
-        sset = catalogue.strike_set(source, strikes, body.t0_utc, body.t1_utc, bbox)
+        if body.source == "glm":
+            ctx.progress(0.01, f"Listing GLM files (GOES-{sats[0][1:]})")
+            strikes, info = glm.fetch_flashes(cache, bbox, body.t0_utc, body.t1_utc, body.satellite,
+                                              progress=ctx.progress)
+            source = "glm-" + "+".join(info["satellites"])
+            msg = f"{len(strikes)} GLM flashes from {info['n_files']} files"
+            if info["missing_hours"]:
+                msg += f" ({len(info['missing_hours'])} hour(s) had no data)"
+        else:
+            ctx.progress(0.01, "Querying USGS ComCat")
+            strikes, info = usgs.fetch_events(bbox, body.t0_utc, body.t1_utc, body.event_types, progress=ctx.progress)
+            source = usgs.SOURCE
+            msg = (f"{len(strikes)} USGS events" + (": " + ", ".join(f"{n} {k}" for k, n in info["kinds"].items())
+                                                   if strikes else " of these types here (blast coverage is mostly US)"))
         with store.lock(case_id):
-            state.write_strikes(store, case_id, sset, strikes)
+            state.replace_catalogue(store, case_id, source, strikes, body.t0_utc, body.t1_utc, bbox)
         store.touch(case_id)
-        msg = f"{len(strikes)} GLM flashes from {info['n_files']} files"
-        if info["missing_hours"]:
-            msg += f" ({len(info['missing_hours'])} hour(s) had no data)"
         ctx.progress(1.0, msg)
         return {"count": len(strikes)}
 
@@ -285,11 +310,32 @@ def import_strikes(case_id: str, file: UploadFile = File(...), store: Store = De
     if len(data) > MAX_CSV_BYTES:
         raise HTTPException(400, "the CSV file is too large (200 MB at most)")
     strikes = catalogue.parse_csv(data)                       # ValueError -> 400
-    sset = catalogue.strike_set("csv", strikes)
     with store.lock(case_id):
-        state.write_strikes(store, case_id, sset, strikes)
+        state.replace_catalogue(store, case_id, "csv", strikes)
     store.touch(case_id)
     return {"count": len(strikes)}
+
+
+@router.post("/cases/{case_id}/lightning/strikes")
+def add_strike(case_id: str, body: StrikeCreate, store: Store = Depends(get_store)):
+    """A user-supplied known event (a reported explosion, a firework display ...)."""
+    store.get_case(case_id)
+    s = catalogue.make_strike(body.t_utc, body.lat, body.lon, body.sigma_m or MANUAL_SIGMA_M, None,
+                              canonical_kind(body.kind) or "event", state.MANUAL)
+    s["id"] = new_id("st")
+    with store.lock(case_id):
+        state.add_manual_strike(store, case_id, s)
+    store.touch(case_id)
+    return s
+
+
+@router.delete("/cases/{case_id}/lightning/strikes/{sid}", status_code=204)
+def delete_strike(case_id: str, sid: str, store: Store = Depends(get_store)):
+    store.get_case(case_id)
+    with store.lock(case_id):
+        state.delete_strike(store, case_id, sid)
+    store.touch(case_id)
+    return Response(status_code=204)
 
 
 @router.get("/cases/{case_id}/lightning/strikes")
@@ -317,11 +363,14 @@ def solve(case_id: str, body: SolveBody | None = None, store: Store = Depends(ge
     case, rec = _recording(store, case_id)
     used, _ = solver.select_onsets(state.read_onsets(store, case_id))
     if not used:
-        raise HTTPException(400, "no thunder onsets to match: run 'detect thunder' or add onsets by hand")
+        raise HTTPException(400, "no onsets (thunder or other bangs) to match: run 'detect thunder' or add "
+                                 "onsets by hand")
     if not state.read_strikes(store, case_id)[1]:
-        raise HTTPException(400, "no strikes: fetch GLM flashes or import a strike catalogue first")
+        raise HTTPException(400, "no events to match: fetch GLM lightning or USGS events, import a catalogue, "
+                                 "or add a known event first")
     _no_running(jobs, case_id, "lightning.solve")
-    start = body.start_utc if body.start_utc is not None else case.get("start_utc")
+    # start_utc omitted: use the case's start time (if any); given (even null): use exactly that
+    start = body.start_utc if "start_utc" in body.model_fields_set else case.get("start_utc")
     duration = _duration(store, case_id, rec)
     request = body.model_dump()
 

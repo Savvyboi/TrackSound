@@ -47,6 +47,7 @@ AFTER_S = 1.0                  # level window after the candidate
 SUSTAIN_S = (0.25, 1.5)        # rumble check window after the onset
 MAX_DURATION_S = 90.0
 FINE_HOP_S = 0.01
+STARTUP_S = 1.0                # no onsets in the first second (filters settle, no background yet)
 
 ProgressFn = Callable[[float, str | None], None]
 
@@ -235,6 +236,7 @@ def detect_onsets(env: Envelope, audio_path: Path | None = None, sensitivity: fl
     hop = env.hop_s
     w = max(3, int(round(1.0 / hop)) | 1)
     is_peak = (d >= thr) & (d >= ndimage.maximum_filter1d(d, size=w, mode="nearest"))
+    is_peak[: int(round(STARTUP_S / hop))] = False     # filter start-up transient, and no background yet
     peaks = np.flatnonzero(is_peak)
     order = peaks[np.argsort(-d[peaks], kind="stable")]
     gap_frames = max(1, int(round(max(min_gap_s, 0.5) / hop)))
@@ -252,7 +254,9 @@ def detect_onsets(env: Envelope, audio_path: Path | None = None, sensitivity: fl
     for n, i in enumerate(accepted):
         if progress and accepted:
             progress(n / len(accepted), f"Refining onset {n + 1} of {len(accepted)}")
-        out.append(_describe(env, os_, _plateau_start(d, i, hop), audio_path))
+        o = _describe(env, os_, _plateau_start(d, i, hop, floor=int(round(STARTUP_S / hop))), audio_path)
+        if o["t"] >= STARTUP_S:
+            out.append(o)
     # refinement can move onsets; keep the min-gap rule on the final times (keep the stronger)
     out.sort(key=lambda o: o["t"])
     final: list[dict] = []
@@ -265,14 +269,15 @@ def detect_onsets(env: Envelope, audio_path: Path | None = None, sensitivity: fl
     return final
 
 
-def _plateau_start(d: np.ndarray, i: int, hop: float, frac: float = 0.8, max_back_s: float = 4.0) -> int:
+def _plateau_start(d: np.ndarray, i: int, hop: float, frac: float = 0.8, max_back_s: float = 4.0,
+                   floor: int = 0) -> int:
     """First frame of the run, ending at peak i, where d stays above frac * d[i].
 
     The step detector stays high for a while after an onset (until the background window
     fills with rumble), so its maximum can sit seconds after the onset; the start of the
     plateau is the better anchor for the refinement.
     """
-    lim = max(0, i - int(round(max_back_s / hop)))
+    lim = max(floor, i - int(round(max_back_s / hop)))
     j = i
     while j > lim and d[j - 1] >= frac * d[i]:
         j -= 1

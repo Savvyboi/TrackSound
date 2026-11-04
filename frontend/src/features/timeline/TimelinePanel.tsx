@@ -29,6 +29,7 @@ import {
   useEnvelope,
   useLightning,
   useSearch,
+  useAlerts,
 } from "../../api/queries";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Segmented, Slider, Switch } from "../../components/ui/form";
@@ -107,6 +108,12 @@ function ReadyTimeline() {
   const matchId = useWs((s) => s.matchId);
   const showOverlays = useWs((s) => s.showOverlays);
   const showWeak = useWs((s) => s.showWeak);
+  const alertId = useWs((s) => s.alertId);
+  const alerts = useAlerts(c.id, tab === "alerts");
+  const alertMarks = useMemo(
+    () => (tab === "alerts" ? (alerts.data?.headers ?? []).map((h) => ({ t: h.t, label: h.event, active: h.id === alertId })) : []),
+    [tab, alerts.data, alertId],
+  );
   const rec = c.recording!;
   const info = rec.spectrogram!;
   const D = caseDuration(c);
@@ -159,6 +166,7 @@ function ReadyTimeline() {
       pendingFit,
       showOverlays,
       showWeak,
+      alertMarks,
       envOverview: envOverview.data ?? null,
       envDetail: detailOn ? (envDetail.data ?? null) : null,
       onsets: lightning.data?.onsets ?? [],
@@ -170,7 +178,7 @@ function ReadyTimeline() {
       enfOverlay: matchId ? (match.data?.overlay ?? null) : null,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, c.id, c.temperature_c, rec.uploaded_at, info, D, clock, tool, events.data, numbers, selectedEventId, checkedEventIds, rank, searchId, curves.data, candLabels, pendingFit, showOverlays, showWeak, envOverview.data, envDetail.data, detailOn, lightning.data, onsetId, flashId, enf.data, matchId, match.data],
+    [mode, c.id, c.temperature_c, rec.uploaded_at, info, D, clock, tool, events.data, numbers, selectedEventId, checkedEventIds, rank, searchId, curves.data, candLabels, pendingFit, showOverlays, showWeak, alertMarks, envOverview.data, envDetail.data, detailOn, lightning.data, onsetId, flashId, enf.data, matchId, match.data],
   );
 
   const handlers: Handlers = {
@@ -232,11 +240,17 @@ function Toolbar() {
   useWs((s) => s.flashId);
   const target = playTarget(qc, c.id);
   const setTool = (t: Tool) => ws.set({ tool: tool === t ? "pan" : t, boxDraft: null });
+  const spec = c.recording?.spectrogram;
+  const fLo = spec ? spec.f0 : 40;
+  const fHi = spec ? spec.f0 + spec.df * (spec.n_bins - 1) : 450;
 
   const title =
     mode === "spectrogram" ? (
       <>
-        <AudioWaveform className="size-3.5 text-accent" /> Spectrogram <span className="font-normal text-fg-faint">40–450 Hz, whitened</span>
+        <AudioWaveform className="size-3.5 text-accent" /> Spectrogram{" "}
+        <span className="hidden font-normal text-fg-faint @5xl:inline">
+          {Math.round(fLo)}–{Math.round(fHi)} Hz, whitened
+        </span>
       </>
     ) : mode === "thunder" ? (
       <>
@@ -244,12 +258,12 @@ function Toolbar() {
       </>
     ) : (
       <>
-        <Activity className="size-3.5 text-src-enf" /> Mains hum frequency <span className="font-normal text-fg-faint">(ENF)</span>
+        <Activity className="size-3.5 text-src-enf" /> Mains hum <span className="hidden font-normal text-fg-faint @4xl:inline">frequency (ENF)</span>
       </>
     );
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b border-line px-2">
+    <div className="@container flex h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-line px-2 whitespace-nowrap">
       <div className="flex min-w-0 items-center gap-1.5 px-1.5 text-xs font-semibold text-fg">{title}</div>
       <Divider />
       <IconButton label="Pan and zoom (H)" active={tool === "pan"} onClick={() => ws.set({ tool: "pan", boxDraft: null })}>
@@ -290,7 +304,7 @@ function Toolbar() {
       <ViewRange />
       <div className="flex-1" />
       <div className="flex items-center gap-1.5">
-        <span className="hidden text-2xs text-fg-faint xl:inline">{target.label}</span>
+        <span className="hidden text-2xs text-fg-faint @6xl:inline">{target.label}</span>
         <IconButton
           label={pbState === "playing" ? "Pause (Space)" : `Play ${target.label.toLowerCase()} (Space)`}
           variant="secondary"
@@ -343,7 +357,7 @@ function ViewRange() {
   const span = view.t1 - view.t0;
   const dec = span < 20 ? 1 : 0;
   return (
-    <div className="ml-2 hidden items-center gap-1.5 text-2xs text-fg-faint lg:flex tnum">
+    <div className="ml-2 hidden items-center gap-1.5 text-2xs text-fg-faint @4xl:flex tnum">
       <span className="text-fg-muted">
         {fmtRec(view.t0, dec)} – {fmtRec(view.t1, dec)}
       </span>
@@ -617,7 +631,7 @@ function EnfOverlay({
       </span>
       {overlay && (
         <span className="flex items-center gap-1.5">
-          <span className="h-0.5 w-3 rounded bg-[#fbbf24]" /> Reference (aligned)
+          <span className="h-1 w-3 rounded bg-[#fbbf24]/60" /> Reference (aligned)
         </span>
       )}
     </div>

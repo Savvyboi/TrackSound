@@ -106,6 +106,9 @@ def test_strikes_and_solve(client, storm_case):
     sol2 = client.get(f"{base}/solves/{j['result']['solve_id']}").json()
     assert sol2["mode"] == "known_start" and abs(sol2["best"]["start_utc"] - storm.start_utc - 1.0) <= 3.0 + 1e-6
     assert [s["id"] for s in client.get(base).json()["solves"]] == [sol2["id"], sid]
+    # an explicit null ignores the case's start time (the UI's "use start time" switch off)
+    j = wait_job(client, client.post(f"{base}/solve", json={"start_utc": None}).json()["id"])
+    assert client.get(f"{base}/solves/{j['result']['solve_id']}").json()["mode"] == "free"
 
     assert client.delete(f"{base}/solves/{sid}").status_code == 204
     assert client.get(f"{base}/solves/{sid}").status_code == 404

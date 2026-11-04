@@ -6,7 +6,7 @@ import { useCase } from "../../api/queries";
 import { Button } from "../../components/ui/Button";
 import { EmptyState, ErrorNote, Kbd, Skeleton, Spinner } from "../../components/ui/misc";
 import { Modal } from "../../components/ui/overlay";
-import { isTypingTarget } from "../../lib/hooks";
+import { isInteractiveTarget, isTypingTarget } from "../../lib/hooks";
 import {
   fitAll,
   openCase,
@@ -52,8 +52,9 @@ export function WorkspacePage() {
       if (first || s.view.t1 > duration) ws.set({ view: { t0: 0, t1: duration } });
     }
     if (info) {
-      const lo = Math.max(info.f0, 40);
-      const hi = Math.min(info.f0 + info.df * (info.n_bins - 1), 450);
+      // the spectrogram's own range: about 10-450 Hz for new uploads, 40-450 Hz for older cases
+      const lo = info.f0;
+      const hi = info.f0 + info.df * (info.n_bins - 1);
       const b = s.freqBounds;
       if (Math.abs(b.lo - lo) > 0.01 || Math.abs(b.hi - hi) > 0.01) ws.set({ freqBounds: { lo, hi }, freq: { lo, hi } });
     }
@@ -120,6 +121,7 @@ function Shortcuts({ caseId }: { caseId: string }) {
       const mode = modeForTab(s.tab);
       const k = e.key;
       if (k === " ") {
+        if (isInteractiveTarget(e.target)) return; // let the focused control handle Space
         e.preventDefault();
         togglePlay(qc, caseId);
       } else if (k === "Escape") {
@@ -145,7 +147,7 @@ function Shortcuts({ caseId }: { caseId: string }) {
         e.preventDefault();
         const span = s.view.t1 - s.view.t0;
         panTime((k === "ArrowLeft" ? -1 : 1) * span * (e.shiftKey ? 0.5 : 0.1));
-      } else if (k >= "1" && k <= "5") {
+      } else if (k >= "1" && k <= "6") {
         setTab(TABS[Number(k) - 1]);
       } else if (k === "?") {
         ws.set({ showShortcuts: !s.showShortcuts });
@@ -174,7 +176,7 @@ const SHORTCUTS: [string[], string][] = [
   [["A", "R"], "Accept / reject the selected flyover"],
   [["O"], "Add thunder onsets by clicking (Lightning tab)"],
   [["R"], "Draw the search region on the map (nothing selected)"],
-  [["1", "…", "5"], "Switch sidebar tab"],
+  [["1", "…", "6"], "Switch sidebar tab"],
   [["Esc"], "Cancel the current tool or selection"],
 ];
 

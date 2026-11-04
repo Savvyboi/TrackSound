@@ -3,7 +3,7 @@ import { ChevronRight, CircleAlert, Clock3, Copy, Crosshair, Info, ListOrdered, 
 import { useState } from "react";
 import { api, errorMessage } from "../../api/client";
 import { useStartJob } from "../../api/jobs";
-import { casePath, qk, useAircraftEvents, usePatchCase, useSearch, useSearches } from "../../api/queries";
+import { casePath, qk, useAircraftEvents, useFlightSet, usePatchCase, useSearch, useSearches } from "../../api/queries";
 import type { AircraftCandidate, AircraftSearch, BBox } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Checkbox, NumberInput } from "../../components/ui/form";
@@ -17,6 +17,7 @@ import { fmtClock, fmtDateTime } from "../../lib/tz";
 import { focusMap, useWs, ws } from "../../state/workspace";
 import { caseTz, useCaseData } from "../workspace/caseContext";
 import { eventNumbers } from "./actions";
+import { CategoryIcon } from "./FlightsSection";
 
 const MODE_LABEL: Record<AircraftSearch["mode"], string> = { blind: "Blind", point: "Known point", single: "Single", refine: "Refine" };
 
@@ -132,6 +133,16 @@ function SearchCard({ s, open, onToggle }: { s: AircraftSearch; open: boolean; o
           <Trash2 />
         </IconButton>
       </div>
+      {s.notes && s.notes.length > 0 && (
+        <ul className="mx-2.5 mb-2 flex flex-col gap-1 rounded-md border border-warn/25 bg-warn/8 px-2.5 py-1.5">
+          {s.notes.map((n, i) => (
+            <li key={i} className="flex items-start gap-1.5 text-2xs leading-snug text-fg">
+              <Info className="mt-px size-3 shrink-0 text-warn" />
+              <span>{n}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {open && <SearchDetail summary={s} />}
     </div>
   );
@@ -146,9 +157,9 @@ function SearchDetail({ summary }: { summary: AircraftSearch }) {
   const cand = cands.find((k) => k.rank === rank) ?? null;
   return (
     <div className="border-t border-line px-2.5 pt-2 pb-2.5">
-      {s.notes && s.notes.length > 0 && (
+      {full.data?.notes && full.data.notes.length > (summary.notes?.length ?? 0) && (
         <ul className="mb-2 flex flex-col gap-1">
-          {s.notes.map((n, i) => (
+          {full.data.notes.slice(summary.notes?.length ?? 0).map((n, i) => (
             <li key={i} className="flex items-start gap-1.5 text-2xs leading-snug text-fg-muted">
               <Info className="mt-px size-3 shrink-0 text-info" />
               {n}
@@ -208,6 +219,8 @@ function CandidateDetail({ s, k }: { s: AircraftSearch; k: AircraftCandidate }) 
   const patch = usePatchCase(c.id);
   const events = useAircraftEvents(c.id);
   const numbers = eventNumbers(events.data);
+  const flightSet = useFlightSet(c.id);
+  const cats = new Map((flightSet.data?.flights ?? []).map((f) => [f.idx, f.category]));
   const isBest = k.rank === 1;
   const sameStart = c.start_utc != null && Math.abs(c.start_utc - k.start_utc) < 0.5 && c.start_utc_source === "aircraft";
 
@@ -292,7 +305,11 @@ function CandidateDetail({ s, k }: { s: AircraftSearch; k: AircraftCandidate }) 
                   {numbers.get(f.event_id) ?? "?"}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium text-fg">{f.reg || f.icao.toUpperCase()}</span> <span className="text-fg-muted">{f.type ?? ""}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <CategoryIcon category={cats.get(f.flight_idx)} />
+                    <span className="font-medium text-fg">{f.reg || f.icao.toUpperCase()}</span>
+                  </span>{" "}
+                  <span className="text-fg-muted">{f.type ?? ""}</span>
                   <span className="block truncate text-2xs text-fg-faint">{f.desc ?? ""}</span>
                 </span>
                 <span className="text-right text-2xs text-fg-muted tnum">

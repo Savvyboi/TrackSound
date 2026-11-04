@@ -64,6 +64,8 @@ export type Scene = {
   pendingFit: BoxDraft | null;
   showOverlays: boolean;
   showWeak: boolean;
+  /** decoded emergency-alert bursts (Alerts tab) */
+  alertMarks: { t: number; label: string; active: boolean }[];
   // lightning
   envOverview: ThunderEnvelope | null;
   envDetail: ThunderEnvelope | null;
@@ -351,7 +353,7 @@ export class TimelineCanvas {
       drawValueAxis(ctx, g, this.yr.lo, this.yr.hi, this.th, "dB", { minPx: 30 });
     } else {
       this.computeEnfRange();
-      drawValueAxis(ctx, g, this.yr.lo, this.yr.hi, this.th, "Hz", {
+      drawValueAxis(ctx, g, this.yr.lo, this.yr.hi, this.th, this.overlayRelative() ? "rel." : "Hz", {
         minPx: 28,
         format: (v, step) => v.toFixed(Math.max(2, Math.ceil(-Math.log10(step) - 1e-9))),
       });
@@ -360,8 +362,10 @@ export class TimelineCanvas {
 
     ctx.save();
     this.clipPlot(ctx);
-    if (s.mode === "spectrogram") this.drawAircraft(ctx);
-    else if (s.mode === "thunder") this.drawThunder(ctx);
+    if (s.mode === "spectrogram") {
+      this.drawAircraft(ctx);
+      this.drawAlertMarks(ctx);
+    } else if (s.mode === "thunder") this.drawThunder(ctx);
     else this.drawEnf(ctx);
     this.drawPlayback(ctx);
     this.drawHover(ctx);
@@ -591,6 +595,23 @@ export class TimelineCanvas {
     }
   }
 
+  private drawAlertMarks(ctx: CanvasRenderingContext2D) {
+    const g = this.g;
+    for (const m of this.scene.alertMarks) {
+      const x = Math.round(this.tx(m.t)) + 0.5;
+      if (x < g.x0 - 40 || x > g.x1 + 40) continue;
+      ctx.strokeStyle = m.active ? "rgba(251,146,60,1)" : "rgba(251,146,60,0.7)";
+      ctx.lineWidth = m.active ? 2 : 1.25;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, g.y0 + 16);
+      ctx.lineTo(x, g.y1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      this.badge(ctx, x - 4, g.y0 + 9, m.label, "#fb923c", m.active, 1);
+    }
+  }
+
   private boxFromDrag(d: { xa: number; ya: number; xb: number; yb: number }): BoxDraft {
     const xa = clamp(Math.min(d.xa, d.xb), this.g.x0, this.g.x1);
     const xb = clamp(Math.max(d.xa, d.xb), this.g.x0, this.g.x1);
@@ -736,8 +757,10 @@ export class TimelineCanvas {
       });
     }
 
-    // markers
+    // markers (labels are skipped where they would overlap the previous one)
     const dragging = this.drag?.kind === "marker" ? this.drag : null;
+    let lastLabelEnd = -Infinity;
+    ctx.font = FONT_SMALL;
     const drawMarker = (mk: MarkerKind, id: string, t: number, status: EventStatus, sigma: number, label: string, selected: boolean) => {
       const tt = dragging && dragging.id === id ? dragging.t : t;
       const x = Math.round(this.tx(tt)) + 0.5;
@@ -764,7 +787,19 @@ export class TimelineCanvas {
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
       if (mk === "flash") this.bolt(ctx, x, g.y0 + 4, color, selected);
-      else this.badge(ctx, x - 4, g.y0 + 9, label, color, selected, 1);
+      else {
+        ctx.font = FONT_SMALL;
+        const w = ctx.measureText(label).width + 9;
+        if (selected || x - 4 > lastLabelEnd + 2) {
+          this.badge(ctx, x - 4, g.y0 + 9, label, color, selected, 1);
+          lastLabelEnd = x - 4 + w;
+        } else {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(x, g.y0 + 9, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
       ctx.globalAlpha = 1;
     };
     s.onsets.forEach((o, i) => drawMarker("onset", o.id, o.t, o.status, o.sigma_s, `T${i + 1}`, o.id === s.selectedOnsetId));
@@ -806,6 +841,17 @@ export class TimelineCanvas {
 
   // ---- ENF -----------------------------------------------------------------------------
 
+  /** Is the match overlay in relative units (normalised / differenced) rather than absolute Hz? */
+  private overlayRelative(): boolean {
+    const ov = this.scene.enfOverlay;
+    if (!ov) return false;
+    const vals = ov.rec.filter((x): x is number => x != null && Number.isFinite(x));
+    if (!vals.length) return false;
+    vals.sort((a, b) => a - b);
+    const med = vals[Math.floor(vals.length / 2)];
+    return Math.abs(med - (this.scene.enfNominal ?? 50)) > 1 && Math.abs(med - 60) > 1 && Math.abs(med - 50) > 1;
+  }
+
   private computeEnfRange() {
     const s = this.scene;
     const v = ws.get().view;
@@ -816,18 +862,20 @@ export class TimelineCanvas {
       if (x < lo) lo = x;
       if (x > hi) hi = x;
     };
-    const tr = s.enfTrace;
-    if (tr && tr.f.length) {
-      const i0 = Math.max(0, Math.floor((v.t0 - tr.t0) / tr.dt));
-      const i1 = Math.min(tr.f.length - 1, Math.ceil((v.t1 - tr.t0) / tr.dt));
-      for (let i = i0; i <= i1; i++) take(tr.f[i]);
-    }
     const ov = s.enfOverlay;
-    if (ov) {
+    if (ov && ov.t.length) {
+      // the overlay has its own scale: range it on its own
       for (let i = 0; i < ov.t.length; i++) {
         if (ov.t[i] < v.t0 || ov.t[i] > v.t1) continue;
         take(ov.rec[i]);
         take(ov.ref[i]);
+      }
+    } else {
+      const tr = s.enfTrace;
+      if (tr && tr.f.length) {
+        const i0 = Math.max(0, Math.floor((v.t0 - tr.t0) / tr.dt));
+        const i1 = Math.min(tr.f.length - 1, Math.ceil((v.t1 - tr.t0) / tr.dt));
+        for (let i = i0; i <= i1; i++) take(tr.f[i]);
       }
     }
     if (!Number.isFinite(lo)) {
@@ -835,8 +883,9 @@ export class TimelineCanvas {
       lo = nom - 0.05;
       hi = nom + 0.05;
     }
+    const rel = this.overlayRelative();
     const mid = (lo + hi) / 2;
-    const half = Math.max(0.01, ((hi - lo) / 2) * 1.15);
+    const half = Math.max(rel ? 1e-6 : 0.01, ((hi - lo) / 2) * 1.15);
     this.yr = { lo: mid - half, hi: mid + half };
   }
 
@@ -901,7 +950,7 @@ export class TimelineCanvas {
   private drawEnf(ctx: CanvasRenderingContext2D) {
     const s = this.scene;
     const g = this.g;
-    if (s.enfNominal) {
+    if (s.enfNominal && !this.overlayRelative()) {
       const y = Math.round(this.vy(s.enfNominal)) + 0.5;
       if (y > g.y0 && y < g.y1) {
         ctx.strokeStyle = "rgba(255,255,255,0.22)";
@@ -920,8 +969,11 @@ export class TimelineCanvas {
     }
     const ov = s.enfOverlay;
     if (ov && ov.t.length) {
-      this.series(ctx, (i) => ov.t[i], (i) => ov.ref[i], ov.t.length, REF_COLOR, 1.4);
-      this.series(ctx, (i) => ov.t[i], (i) => ov.rec[i], ov.t.length, ENF_COLOR, 1.6);
+      // reference as a wide translucent underlay, recording on top: both stay visible when they agree
+      ctx.globalAlpha = 0.55;
+      this.series(ctx, (i) => ov.t[i], (i) => ov.ref[i], ov.t.length, REF_COLOR, 4);
+      ctx.globalAlpha = 1;
+      this.series(ctx, (i) => ov.t[i], (i) => ov.rec[i], ov.t.length, ENF_COLOR, 1.5);
     } else if (s.enfTrace) {
       const tr = s.enfTrace;
       this.series(ctx, (i) => tr.t0 + i * tr.dt, (i) => tr.f[i], tr.f.length, ENF_COLOR, 1.5);

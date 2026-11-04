@@ -70,24 +70,36 @@ export function eventQuality(ev: AircraftEvent): EventQuality {
   return ev.score >= 6 ? "strong" : ev.score >= 3 ? "possible" : "weak";
 }
 
-const QRANK: Record<EventQuality, number> = { strong: 2, possible: 1, weak: 0 };
-
-/** The two strongest usable events at least `minGap` seconds apart (the default search pair). */
-export function suggestPair(events: AircraftEvent[] | undefined, minGap = 300): [AircraftEvent, AircraftEvent] | null {
-  const pool = (events ?? [])
-    .filter((e) => e.status !== "rejected" && eventQuality(e) !== "weak")
-    .sort((a, b) => Number(b.status === "accepted") - Number(a.status === "accepted") || QRANK[eventQuality(b)] - QRANK[eventQuality(a)] || b.score - a.score);
-  let best: [AircraftEvent, AircraftEvent] | null = null;
-  let bestScore = -Infinity;
-  for (let i = 0; i < pool.length; i++) {
-    for (let j = i + 1; j < pool.length; j++) {
-      if (Math.abs(pool[i].t_cpa - pool[j].t_cpa) < minGap) continue;
-      const s = Math.min(pool[i].score, pool[j].score) + 0.01 * (pool[i].score + pool[j].score);
-      if (s > bestScore) {
-        bestScore = s;
-        best = pool[i].t_cpa < pool[j].t_cpa ? [pool[i], pool[j]] : [pool[j], pool[i]];
-      }
-    }
+/**
+ * Default search pair: the strongest event and its nearest strong neighbour in time (at least
+ * `minGap` s apart, with no other strong event between them). Adjacent pairs keep the
+ * "nothing heard in between" assumption true on busy skies, which ranks the right place first.
+ */
+export function suggestPair(events: AircraftEvent[] | undefined, minGap = 120): [AircraftEvent, AircraftEvent] | null {
+  const usable = (events ?? []).filter((e) => e.status !== "rejected");
+  let strong = usable.filter((e) => eventQuality(e) === "strong" || e.status === "accepted");
+  if (strong.length < 2) strong = usable.filter((e) => eventQuality(e) !== "weak" || e.status === "accepted");
+  if (strong.length < 2) return null;
+  strong.sort((a, b) => a.t_cpa - b.t_cpa);
+  const byScore = strong.slice().sort((a, b) => b.score - a.score);
+  for (const anchor of byScore) {
+    const i = strong.indexOf(anchor);
+    const opts: AircraftEvent[] = [];
+    const left = strong[i - 1];
+    const right = strong[i + 1];
+    if (left && anchor.t_cpa - left.t_cpa >= minGap) opts.push(left);
+    if (right && right.t_cpa - anchor.t_cpa >= minGap) opts.push(right);
+    if (!opts.length) continue;
+    opts.sort((a, b) => Math.abs(a.t_cpa - anchor.t_cpa) - Math.abs(b.t_cpa - anchor.t_cpa));
+    const other = opts[0];
+    return anchor.t_cpa < other.t_cpa ? [anchor, other] : [other, anchor];
   }
-  return best;
+  return null;
+}
+
+/** Is there another strong event between these two? (the backend then relaxes its silence filter) */
+export function strongBetween(events: AircraftEvent[] | undefined, a: AircraftEvent, b: AircraftEvent): number {
+  const lo = Math.min(a.t_cpa, b.t_cpa);
+  const hi = Math.max(a.t_cpa, b.t_cpa);
+  return (events ?? []).filter((e) => e.id !== a.id && e.id !== b.id && e.status !== "rejected" && eventQuality(e) === "strong" && e.t_cpa > lo && e.t_cpa < hi).length;
 }

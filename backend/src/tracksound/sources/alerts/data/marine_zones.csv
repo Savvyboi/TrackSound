@@ -1,0 +1,771 @@
+code,area,name,lat,lon
+57000,PZ,"Eastern North Pacific Ocean, and along U.S. West Coast from Canadian border to Mexican border",,
+57100,PZ,Synopsis for Northern and Central Washington Coast and Inland Waters,,
+57110,PZ,Grays Harbor Bar,46.957,-124.04
+57130,PZ,West Entrance U.S. Waters Strait Of Juan De Fuca,48.374,-124.472
+57131,PZ,Central U.S. Waters Strait Of Juan De Fuca,48.215,-123.654
+57132,PZ,East Entrance U.S. Waters Strait Of Juan De Fuca,48.26,-122.948
+57133,PZ,Northern Inland Waters Including The San Juan Islands,48.614,-122.803
+57134,PZ,Admiralty Inlet,48.067,-122.673
+57135,PZ,Puget Sound and Hood Canal,47.571,-122.609
+57150,PZ,Coastal Waters From Cape Flattery To James Island Out 10 Nm,48.206,-124.844
+57153,PZ,Coastal Waters From James Island To Point Grenville Out 10 Nm,47.619,-124.558
+57156,PZ,Coastal Waters From Point Grenville To Cape Shoalwater Out 10 Nm,47.029,-124.306
+57170,PZ,Coastal Waters From Cape Flattery To James Island 10 To 60 Nm,48.105,-125.496
+57173,PZ,Waters From James Island To Point Grenville 10 To 60 Nm,47.609,-125.429
+57176,PZ,Coastal Waters From Point Grenville To Cape Shoalwater 10 To 60 Nm,47.022,-125.125
+57200,PZ,Synopsis for Southern Washington and Northern Oregon Coast,,
+57210,PZ,Columbia River Bar,46.231,-123.751
+57251,PZ,Coastal waters from Cape Shoalwater WA to Cape Falcon OR out 10 nm,46.295,-124.123
+57252,PZ,Coastal waters from Cape Falcon to Cape Foulweather OR out 10 nm,45.278,-124.112
+57253,PZ,Coastal waters from Cape Foulweather to Florence OR out 10 nm,44.404,-124.217
+57271,PZ,Waters from Cape Shoalwater WA to Cape Falcon OR from 10 to 60 nm,46.251,-124.936
+57272,PZ,Waters from Cape Falcon to Cape Foulweather OR from 10 to 60 nm,45.271,-124.884
+57273,PZ,Waters from Cape Foulweather to Florence OR from 10 to 60 nm,44.39,-124.973
+57300,PZ,Synopsis for Southern Oregon Coastal Waters,,
+57350,PZ,Coastal waters from Florence to Cape Blanco OR out 10 nm,43.424,-124.442
+57356,PZ,Coastal waters from Cape Blanco OR to Pt. St. George CA out 10 nm,42.313,-124.5
+57370,PZ,Waters from Florence to Cape Blanco OR from 10 to 60 nm,43.424,-125.207
+57376,PZ,Waters from Cape Blanco OR to Pt. St. George CA from 10 to 60 nm,42.312,-125.278
+57400,PZ,Synopsis for Northern California Waters,,
+57410,PZ,Humboldt Bay Bar,40.757,-124.229
+57415,PZ,Humboldt Bay,40.791,-124.171
+57450,PZ,Coastal waters from Pt. St. George to Cape Mendocino CA out 10 nm,41.122,-124.303
+57455,PZ,Coastal waters from Cape Mendocino to Pt. Arena CA out 10 nm,39.721,-124.083
+57470,PZ,Waters from Pt. St. George to Cape Mendocino CA from 10 to 60 nm,41.122,-125.045
+57475,PZ,Waters from Cape Mendocino to Pt. Arena CA from 10 to 60 nm,39.711,-124.845
+57500,PZ,Synopsis for Central California Coast and Bays,,
+57530,PZ,"San Pablo Bay, Suisun Bay, the West Delta and the San Francisco Bay north of the Bay Bridge",38.002,-122.277
+57531,PZ,San Francisco Bay South of the Bay Bridge,37.642,-122.254
+57535,PZ,Monterey Bay,36.809,-121.915
+57540,PZ,Coastal Waters from Point Arena to Point Reyes California out to 10 nm,38.485,-123.393
+57545,PZ,Coastal Waters from Point Reyes to Pigeon Point California out to 10 nm,37.672,-122.726
+57560,PZ,Coastal Waters from Pigeon Point to Point Pinos California out to 10 nm,36.926,-122.263
+57565,PZ,Coastal Waters from Point Pinos to Point Piedras Blancas California out to 10 nm,36.133,-121.793
+57570,PZ,Waters from Point Arena to Point Reyes 10-60 NM,38.461,-124.197
+57571,PZ,Waters from Point Reyes to Pigeon Point 10-60 NM,37.593,-123.508
+57575,PZ,Waters from Pigeon Point to Point Pinos 10-60 NM,36.904,-123.027
+57576,PZ,Waters from Point Pinos to Point Piedras Blancas 10-60 NM,36.124,-122.552
+57600,PZ,Synopsis for Southern California Coast and Santa Barbara Channel,,
+57645,PZ,Point Piedras Blancas to Point Sal westward out to 10 NM,35.299,-121.014
+57650,PZ,East Santa Barbara Channel from Pt. Conception to Pt. Mugu CA including Santa Cruz Island,34.249,-119.749
+57655,PZ,Inner waters from Point Mugu to San Mateo Pt. CA including Santa Catalina and Anacapa Islands,33.606,-118.598
+57670,PZ,Point Piedras Blancas to Point Sal from 10 to 60 NM,35.285,-121.8
+57673,PZ,Waters from Pt. Sal to Santa Cruz Island CA and westward 60 nm including San Miguel and Santa Rosa Islands,34.322,-121.041
+57676,PZ,Outer waters from Santa Cruz Island to San Clemente Island to 60 NM offshore including San Nicolas and Santa Barbara Islands,33.535,-119.773
+57700,PZ,Synopsis for Far Southern California Coast,,
+57740,PZ,Coastal Waters from San Mateo Point to the Mexican Border and out to 10 nm,32.941,-117.409
+57745,PZ,Waters from San Mateo Point to the Mexican Border Extending 10 to 60 nm out including San Clemente Island,32.854,-117.949
+57800,PZ,Cape Flattery to Cape Shoalwater between 60 NM and 150 NM offshore,47.595,-126.919
+57805,PZ,Cape Shoalwater to Cape Lookout between 60 NM and 150 NM offshore,45.919,-126.338
+57810,PZ,"Cape Lookout to Florence, OR between 60 NM and 150 NM offshore",44.529,-126.345
+57815,PZ,"Florence, OR to Point St. George between 60 NM and 150 NM offshore",42.889,-126.665
+57820,PZ,Point St. George to Point Arena between 60 NM and 150 NM offshore,40.289,-126.361
+57825,PZ,Point Arena to Pigeon Point between 60 NM and 150 NM offshore,37.937,-125.389
+57830,PZ,Pigeon Point to Point Piedras Blancas between 60 NM and 150 NM offshore,36.321,-124.23
+57835,PZ,"Point Piedras Blancas to Santa Cruz Island, CA between 60 NM and 150 NM offshore",34.541,-122.884
+57840,PZ,"Santa Cruz Island, CA to San Clemente Island, CA between 60 NM and 150 NM offshore",32.599,-120.256
+57898,PZ,Synopsis for WA and OR Offshore waters,,
+57899,PZ,Synopsis for CA Offshore waters,,
+57900,PZ,Cape Flattery to Cape Shoalwater between 150 NM and 250 NM offshore,47.623,-129.338
+57905,PZ,Cape Shoalwater to Cape Lookout between 150 NM and 250 NM offshore,45.919,-128.655
+57910,PZ,"Cape Lookout to Florence, OR between 150 NM and 250 NM offshore",44.539,-128.584
+57915,PZ,"Florence, OR to Point St. George between 150 NM and 250 NM offshore",42.889,-128.849
+57920,PZ,Point St. George to Point Arena between 150 NM and 250 NM offshore,40.205,-128.498
+57925,PZ,Point Arena to Pigeon Point between 150 NM and 250 NM offshore,37.711,-127.481
+57930,PZ,Pigeon Point to Point Piedras Blancas between 150 NM and 250 NM offshore,36.018,-126.248
+57935,PZ,"Point Piedras Blancas to Santa Cruz Island, CA between 150 NM and 250 NM offshore",34.158,-124.859
+57940,PZ,"Santa Cruz Island, CA to 120W between 150 NM and 250 NM offshore",31.514,-122.104
+57945,PZ,"San Clemente Island, CA to Guadalupe Island from 60 NM offshore west to 120W",30.203,-118.511
+58000,PK,"North Pacific Ocean near Alaska, and along Alaska coastaline, including the Bering Sea and the Gulf of Alaska",,
+58011,PK,Glacier Bay,58.734,-136.286
+58012,PK,Northern Lynn Canal,59.035,-135.296
+58013,PK,Southern Lynn Canal,58.528,-135.036
+58021,PK,Icy Strait,58.241,-135.635
+58022,PK,Cross Sound,58.205,-136.445
+58031,PK,Stephens Passage,57.798,-133.915
+58032,PK,Northern Chatham Strait,57.604,-134.944
+58033,PK,Southern Chatham Strait,56.5,-134.452
+58034,PK,Frederick Sound,57.001,-133.654
+58035,PK,Sumner Strait,56.356,-133.47
+58036,PK,Clarence Strait,55.414,-131.775
+58053,PK,Yakutat Bay,59.748,-139.703
+58098,PK,Synopsis for Southeast Alaska Inner Channel Coastal Waters,,
+58099,PK,Synopsis for Outside Waters,,
+58197,PK,Synopsis for North Gulf Coast and Kodiak Island waters and Cook Inlet Waters,,
+58199,PK,Synopsis for SW AK and Bristol Bay and Alaska Peninsula and the Aleutian Islands,,
+58298,PK,Synopsis for Arctic Coast,,
+58299,PK,Synopsis for Northwest Coast,,
+58311,PK,Gulf of Alaska North of 57 Degrees North and East of 144 W,,
+58312,PK,Gulf of Alaska South of 57 Degrees North and East of 144 W,,
+58351,PK,Gulf of Alaska Offshore North of 57N and West of 144W,57.835,-146.811
+58352,PK,Gulf of Alaska Offshore South of 57N North of 55N and West of 144W,55.962,-148.124
+58398,PK,Synopsis for Eastern Gulf of Alaska,,
+58399,PK,Synopsis for Western Gulf of Alaska,,
+58411,PK,Bering Sea Offshore West of 180 and East of the International Date Line,55.883,177.048
+58412,PK,Bering Sea Offshore 171W to 180 and North of 56N,57.522,-175.5
+58413,PK,Bering Sea Offshore 171W to 180 and South of 56N,54.717,-175.735
+58414,PK,Bering Sea Offshore East of 171W,56.896,-167.65
+58499,PK,Synopsis for the Bering Sea,,
+58500,PK,Western US Arctic Offshore,71.861,-165.983
+58505,PK,Central US Arctic Offshore,73.44,-157.549
+58510,PK,Eastern US Arctic Offshore,72.677,-146.442
+58599,PK,Synopsis for Arctic Waters,,
+58641,PK,Dixon Entrance to Cape Decision out to 15 NM,55.311,-133.54
+58642,PK,Cape Decision to Cape Edgecumbe out to 15 NM,56.477,-135.228
+58643,PK,Cape Edgecumbe to Cape Spencer out to 15 NM,57.55,-136.378
+58644,PK,Cape Spencer to Cape Fairweather out to 15 NM,58.427,-137.521
+58651,PK,Cape Fairweather to Icy Cape out to 15 NM,59.37,-139.884
+58652,PK,Icy Cape to Cape Suckling out to 15 NM,59.92,-142.804
+58661,PK,Dixon Entrance to Cape Decision from 15 to 90 NM,54.846,-134.782
+58662,PK,Cape Decision to Cape Edgecumbe from 15 to 80 NM,56.032,-136.128
+58663,PK,Cape Edgecumbe to Cape Spencer from 15 to 80 NM,57.181,-137.488
+58664,PK,Cape Spencer to Cape Fairweather from 15 to 85 NM,57.989,-138.606
+58671,PK,Cape Fairweather to Icy Cape from 15 to 80 NM,58.805,-140.414
+58672,PK,Icy Cape to Cape Suckling from 15 to 80 NM,59.225,-142.9
+58710,PK,Cape Suckling to Gravel Point out to 15 NM,60.037,-145.007
+58711,PK,Gravel Point to Cape Cleare out to 15 NM,59.96,-146.8
+58712,PK,Cape Suckling to Cape Cleare from 15 to 75 NM,59.231,-145.869
+58714,PK,Resurrection Bay,60.06,-149.39
+58715,PK,Cape Cleare to Gore Point out to 15 NM,59.58,-149.442
+58716,PK,Cape Cleare to Gore Point from 15 to 75 NM,59.054,-148.835
+58720,PK,Port of Valdez,61.103,-146.447
+58721,PK,Valdez Narrows,61.05,-146.623
+58722,PK,Valdez Arm,60.916,-146.837
+58723,PK,Passage Canal,60.807,-148.574
+58724,PK,Northwest Prince William Sound,60.814,-147.794
+58725,PK,Central and Eastern Prince William Sound,60.576,-146.776
+58726,PK,Southwest Prince William Sound,60.21,-147.857
+58730,PK,West of Barren Islands Including Kamishak Bay,59.212,-153.077
+58731,PK,Barren Islands East,58.779,-151.766
+58732,PK,Marmot Island to Sitkinak out to 15 NM,57.271,-152.638
+58733,PK,Gore Point to Marmot Island from 15 to 80 NM,58.346,-150.387
+58734,PK,Marmot Island To Sitkinak from 15 to 85 NM,56.763,-151.946
+58736,PK,Chiniak Bay,57.703,-152.339
+58737,PK,Marmot Bay,58.006,-152.533
+58738,PK,Shelikof Strait,58.033,-154.067
+58740,PK,Cook Inlet North Kalgin Island,60.927,-150.868
+58741,PK,Kachemak Bay,59.58,-151.574
+58742,PK,Cook Inlet Kalgin Island to Point Bede,59.969,-152.209
+58750,PK,Sitkinak to Castle Cape out to 15 NM,56.71,-155.948
+58751,PK,Sitkinak to Castle Cape from 15 to 100 NM,55.485,-155.685
+58752,PK,Castle Cape to Cape Sarichef out to 15 NM,55.609,-159.62
+58753,PK,Castle Cape to Cape Tolstoi from 15 to 100 NM,54.669,-158.906
+58754,PK,Cape Tolstoi to Cape Sarichef out to 15 NM,54.757,-162.913
+58755,PK,Cape Tolstoi to Cape Sarichef from 15 to 100 NM,53.989,-161.939
+58756,PK,Port Heiden to Nelson Lagoon out to 15 NM,56.341,-160.512
+58757,PK,Port Heiden to Nelson Lagoon from 15 to 60 NM,56.855,-161.007
+58758,PK,Nelson Lagoon to Cape Sarichef out to 15 NM,55.314,-163.431
+58759,PK,Nelson Lagoon to Cape Sarichef from 15 to 70 NM,55.82,-164.007
+58760,PK,Bristol Bay greater than 15 NM,57.893,-159.437
+58761,PK,Bristol Bay from Port Heiden to Cape Chichagof out to 15 NM,57.555,-158.262
+58762,PK,Bristol Bay from Cape Chichagof to Cape Pierce out to 15 NM,58.575,-159.454
+58763,PK,Kuskokwim Delta and Etolin Strait out to 15 NM,59.733,-163.732
+58764,PK,Kuskokwim Delta from 15 to 80 NM,58.596,-164.01
+58765,PK,North and West of Nunivak Island,60.434,-167.88
+58766,PK,Pribilof Islands Nearshore Waters,56.894,-169.959
+58767,PK,Saint Matthew Island Waters,60.376,-153.855
+58770,PK,Cape Sarichef to Nikoski Bering Side out to 15 NM,53.859,-167.169
+58771,PK,Unalaska Bay,53.948,-166.526
+58772,PK,Cape Sarichef to Nikoski Bering Side from 15 to 85 NM,54.539,-167.59
+58773,PK,Cape Sarichef to Nikoski Pacific Side out to 15 NM,53.479,-166.685
+58774,PK,Cape Sarichef to Nikoski Pacific Side from 15 to 85 NM,52.962,-165.842
+58775,PK,Nikolski to Seguam Bering Side from 15 to 100 NM,52.798,-170.794
+58776,PK,Nikolski to Seguam Bering Side from 15 to 85 NM,53.361,-171.457
+58777,PK,Nikolski to Seguam Pacfic Side out to 15 NM,52.468,-170.672
+58778,PK,Nikolski to Seguam Pacific Side from 15 to 75 NM,51.863,-170.282
+58780,PK,Seguam to Adak Bering Side out to 15 NM,52.241,-174.975
+58781,PK,Seguam to Adak Bering Side from 15 to 85 NM,52.903,-175.267
+58782,PK,Seguam to Adak Pacific Side out to 15 NM,51.846,-174.694
+58783,PK,Seguam to Adak Pacific Side from 15 to 75 NM,51.218,-174.442
+58784,PK,Adak to Kiska Bering Side,52.534,-3.108
+58785,PK,Adak to Kiska Pacific Side,51.17,-20.301
+58786,PK,Kiska to Attu Bering Side,53.231,174.596
+58787,PK,Kiska to Attu Pacific Side,51.836,174.346
+58801,PK,Etolin Strait to Dall Point out to 15 NM,61.172,-165.881
+58802,PK,Dall Point to Kwikpak Pass out to 15 NM,62.385,-165.657
+58803,PK,Kwikpak Pass to Cape Stephens out to 15 NM,63.366,-163.464
+58804,PK,Cape Stephens to Moses Point out to 15 NM,64.115,-161.478
+58805,PK,Moses Point to Sledge Island out to 15 NM,64.376,-163.958
+58806,PK,Sledge Island to Wales out to 15 NM,65.082,-167.189
+58807,PK,Wales to Cape Espenberg out to 15 NM,66.258,-166.341
+58808,PK,Cape Espenberg to Motherwood Point out to 10 NM,66.321,-163.314
+58809,PK,Motherwood Point to Cape Krusenstem out to 10 NM,66.596,-161.754
+58810,PK,Cape Krusenstern to Cape Thompson out to 15 NM,67.674,-165.003
+58811,PK,Cape Thompson to Cape Beaufort out to 15 NM,68.714,-166.136
+58812,PK,Cape Beaufort to Point Franklin out to 15 NM,70.228,-161.849
+58813,PK,Point Franklin to Cape Halkett out to 15 NM,71.159,-155.728
+58814,PK,Cape Halkett to Flaxman Island out to 15 NM,70.567,-149.5
+58815,PK,Flaxman Island to Demarcation Point out to 15 NM,70.123,-143.495
+58816,PK,South Side of Saint Lawrence Island out to 15 NM,63.123,-170.402
+58817,PK,North Side of Saint Lawrence Island out to 15 NM,63.651,-170.311
+58850,PK,Etolin Strait to Kwemeluk Pass from 15 to 90 NM,62.133,-167.447
+58851,PK,Southwest of Saint Lawrence Island from 15 to 100 NM,62.57,-172.639
+58852,PK,Norton Sound greater than 15 NM,63.899,-163.823
+58853,PK,Kwemeluk Pass to Kwikpak Pass from 15 to 90 NM,63.419,-166.453
+58854,PK,Sledge Island to Wales greater than 15 NM,64.406,-169.06
+58855,PK,Kotzebue Sound greater than 10 NM,66.532,-162.946
+58856,PK,Wales to Cape Thompson greater than 15 NM,67.088,-167.114
+58857,PK,Cape Thompson to Cape Beaufort from 15 to 85 NM,69.081,-167.778
+58858,PK,Cape Beaufort to Point Franklin from 15 to 85 NM,70.635,-163.407
+58859,PK,Point Franklin to Cape Halkett from 15 to 75 NM,71.846,-156.149
+58860,PK,Cape Halkett to Flaxman Island from 15 to 80 NM,71.223,-148.962
+58861,PK,Flaxman Island to Demarcation Point from 15 to 75 NM,70.814,-143.504
+59000,PH,"Central Pacific Ocean, including Hawaiian waters",,
+59100,PH,Synopsis for Hawaiian Coastal Waters,,
+59105,PH,Synopsis for Hawaiian Offshore Waters,,
+59110,PH,Kauai Northwest Waters,22.447,-160.036
+59111,PH,Kauai Windward Waters,22.423,-159.102
+59112,PH,Kauai Leeward Waters,21.664,-160.231
+59113,PH,Kauai Channel,21.617,-158.972
+59114,PH,Oahu Windward Waters,21.92,-157.866
+59115,PH,Oahu Leeward Waters,21.042,-158.217
+59116,PH,Kaiwi Channel,21.219,-157.479
+59117,PH,Maui County Windward Waters,21.314,-156.354
+59118,PH,Maui County Leeward Waters,20.669,-157.213
+59119,PH,Maalaea Bay,20.742,-156.523
+59120,PH,Pailolo Channel,21.019,-156.891
+59121,PH,Alenuihaha Channel,20.302,-156.429
+59122,PH,Big Island Windward Waters,19.911,-154.91
+59123,PH,Big Island Leeward Waters,19.317,-156.232
+59124,PH,Big Island Southeast Waters,18.706,-155.336
+59180,PH,Hawaiian Offshore Waters,20.72,-157.475
+61000,PS,"South Central Pacific Ocean, including American Samoa waters",,
+61100,PS,Synopsis for American Samoa Coastal Waters,,
+61152,PS,Coastal waters of Swain's Island,-11.085,-171.046
+61154,PS,Pago Pago Harbor,-14.28,-170.676
+61155,PS,Northern Coastal waters of Tutuila and Aunuu,-13.978,-170.777
+61156,PS,Southern Coastal waters of Tutuila and Aunuu,-14.617,-170.74
+61157,PS,Northern Coastal waters of Manua,-13.893,-169.506
+61158,PS,Southern Coastal waters of Manua,-14.527,-169.453
+61159,PS,Coastal waters of Rose Atoll,-14.538,-168.161
+65000,PM,"Western Pacific Ocean, including Mariana Island waters",,
+65009,PM,Mexico Border S to 29N to 60 NM offshore,30.622,-116.618
+65011,PM,Mexico S of 29N to Punta Eugenia to 250 NM offshore,28.226,-117.421
+65013,PM,Punta Eugenia to Cabo San Lazaro to 250 NM offshore,25.487,-115.699
+65014,PM,Cabo San Lazaro to Cabo San Lucas to 250 nm offshore of 20N,22.006,-112.845
+65016,PM,"From 17N to 20N between 110W and 115W, including the Revillagigedo Islands",21.78,-112.802
+65017,PM,Northern Gulf of California,30.055,-113.505
+65019,PM,Central Gulf of California,27.02,-111.072
+65021,PM,Southern Gulf of California,24.738,-109.357
+65022,PM,N of 20N and E of 110W including Entrance to the Gulf of California,21.78,-107.766
+65024,PM,Colima and Jalisco out 300 nm offshore S of 20N and E of 110W,18.185,-107.374
+65025,PM,Mexico - Michoachan and Guerrero to 250 NM offshore,15.838,-102.929
+65026,PM,Oaxaca W of Puerto Angel out 250 nm,14.158,-99.328
+65028,PM,Oaxaca E of Puerto Angel out 300 nm including the Gulf of Tehuantepec,13.37,-96.301
+65029,PM,Offshore Chiapas E of 94W,14.511,-93.401
+65101,PM,Synopsis for the Eastern Pacific,,
+65111,PM,Guatemala and El Salvador to 250 NM offshore,11.904,-92.129
+65113,PM,El Salvador to North Costa Rica Including the Gulfs of Fonseca and Papagayo,10.095,-88.597
+65115,PM,North Costa Rica to West Panama to 250 NM offshore,6.662,-84.474
+65117,PM,East Panama and Colombia Including Gulf of Panama,4.67,-79.66
+65119,PM,Ecuador Including Gulf of Guayaquil to 250 NM offshore,-0.946,-82.209
+65121,PM,Ecuador between 250 and 500 NM Offshore,-0.881,-86.302
+65123,PM,Offshore Galapagos Islands,-0.892,-90.425
+65150,PM,Synopsis for Marianas Waters,,
+65151,PM,Guam Coastal Waters,13.318,144.69
+65152,PM,Rota Coastal Waters,14.177,145.235
+65153,PM,Tinian Coastal Waters,14.837,145.527
+65154,PM,Saipan Coastal Waters,15.411,145.898
+65160,PM,Synopsis for Koror/Palau Waters,,
+65161,PM,Koror Palau Coastal Waters,7.332,134.48
+65170,PM,Synopsis for the Federated States of Micronesia Waters,,
+65171,PM,Yap Coastal Waters,9.48,138.082
+65172,PM,Chuuk Coastal Waters,7.446,151.835
+65173,PM,Pohnpei Coastal Waters,6.972,158.224
+65174,PM,Kosrae Coastal Waters,5.35,162.95
+65180,PM,Synopsis of Majuro Waters,,
+65181,PM,Majuro Coastal Waters,7.08,171.38
+65190,PM,Synopsis of Wake Island Waters,,
+65191,PM,Waters out to 40 Nautical Miles,19.301,166.638
+73000,AN,"Western North Atlantic Ocean, and along U.S. East Coast, from Canadian border south to Currituck Beach Light, N.C.",,
+73005,AN,Synopsis for Eastport ME to Stonington (Deer Isle) ME out 25NM,,
+73050,AN,"Coastal Waters from Eastport, ME to Schoodic Point, ME out 25 NM",44.355,-67.575
+73051,AN,"Coastal Waters from Schoodic Point, ME to Stonington, ME out 25 NM",43.99,-68.24
+73052,AN,"Intra Coastal Waters from Schoodic Point, ME to Stonington, ME",44.266,-68.383
+73070,AN,"Waters from Eastport ME to Schoodic Point, ME from 25 to 40 nm",43.892,-67.613
+73071,AN,"Waters from Schoodic Point, ME to Stonington ME from 25 to 40 nm",43.687,-68.186
+73100,AN,Synopsis for Stonington (Deer Isle) ME to Merrimack River MA out 25 NM,,
+73150,AN,"Coastal Waters from Stonington, ME to Port Clyde, ME out 25 NM",43.829,-68.902
+73151,AN,Penobscot Bay,44.224,-68.852
+73152,AN,"Coastal Waters from Port Clyde, ME to Cape Elizabeth, ME out 25 NM",43.622,-69.567
+73153,AN,Casco Bay,43.718,-70.06
+73154,AN,"Coastal Waters from Cape Elizabeth, ME to Merrimack River, MA out 25 NM",43.152,-70.3
+73170,AN,Waters from Stonington ME to Port Clyde ME from 25 to 40 nm,43.518,-68.74
+73172,AN,Waters from Port Clyde ME to Cape Elizabeth ME from 25 to 40 nm,43.305,-69.296
+73174,AN,Waters from Cape Elizabeth ME to Merrimack River MA from 25 to 40 nm,43.055,-69.793
+73200,AN,Synopsis for Massachusetts and Rhode Island Coastal Waters,,
+73230,AN,Boston Harbor,42.345,-70.934
+73231,AN,Cape Cod Bay,41.892,-70.291
+73232,AN,Nantucket Sound,41.483,-70.245
+73233,AN,Vineyard Sound,41.43,-70.765
+73234,AN,Buzzards Bay,41.566,-70.807
+73235,AN,Rhode Island Sound,41.339,-71.16
+73236,AN,Narragansett Bay,41.581,-71.322
+73237,AN,Block Island Sound,41.228,-71.638
+73250,AN,Coastal waters east of Ipswich Bay and the Stellwagen Bank National Marine Sanctuary,42.421,-70.211
+73251,AN,Massachusetts Bay and Ipswich Bay,42.423,-70.67
+73254,AN,Coastal waters from Provincetown MA to Chatham MA to Nantucket MA out 20 nm,41.635,-69.733
+73255,AN,Coastal Waters extending out to 25 nm South of Marthas Vineyard and Nantucket,41.113,-70.263
+73256,AN,Coastal Waters from Montauk NY to Marthas Vineyard extending out to 20 nm South of Block Island,41.027,-71.21
+73270,AN,Ocean Waters from the Merrimack River to Plymouth from 40 to 60 NM offshore,42.548,-69.722
+73271,AN,Ocean Waters from Provincetown to Nantucket from 20 to 35 NM offshore,41.562,-69.336
+73272,AN,Ocean Waters from Marthas Vineyard to Nantucket from 25 to 45 NM offshore,40.771,-70.003
+73273,AN,Ocean Waters from Montauk NY to Marthas Vineyard from 25 to 40 NM offshore,40.712,-71.017
+73300,AN,Synopsis for Long Island waters and New York Harbor,,
+73331,AN,Long Island Sound East of New Haven CT/Port Jefferson NY to the Mouth of the Connecticut River,41.127,-72.679
+73332,AN,Long Island Sound East of the Mouth of the Connecticut River,41.206,-72.053
+73335,AN,Long Island Sound West of New Haven CT/Port Jefferson NY,41.017,-73.321
+73338,AN,New York Harbor,40.524,-74.079
+73340,AN,Peconic and Gardiners Bays,41.034,-72.313
+73345,AN,South Shore Bays from Jones Inlet through Shinnecock Bay,40.708,-73.07
+73350,AN,Moriches Inlet NY to Montauk Point NY out 20 nm,40.749,-72.207
+73353,AN,Fire Island Inlet NY to Moriches Inlet NY out 20 nm,40.517,-72.964
+73355,AN,Sandy Hook NJ to Fire Island Inlet NY out 20 nm,40.446,-73.575
+73370,AN,Waters from Moriches Inlet NY to Montauk Point NY from 20 to 40 NM,40.451,-72.007
+73373,AN,Waters from Fire Island Inlet NY to Moriches Inlet NY from 20 to 40 NM,40.206,-72.805
+73375,AN,Waters from Sandy Hook NJ to Fire Island Inlet out 20 to 40 nm,40.111,-73.304
+73400,AN,Synopsis for Coastal Waterss from Sandy Hook NJ to Fenwick Island DE,,
+73430,AN,Delaware Bay waters north of East Point NJ to Slaughter Beach DE,39.242,-75.342
+73431,AN,Delaware Bay waters south of East Point NJ to Slaughter Beach DE,39.001,-75.084
+73450,AN,Coastal waters from Sandy Hook to Manasquan Inlet NJ out 20 nm,40.203,-73.845
+73451,AN,Coastal waters from Manasquan Inlet to Little Egg Inlet NJ out 20 nm,39.728,-73.997
+73452,AN,Coastal waters from Little Egg Inlet to Great Egg Inlet NJ out 20 nm,39.321,-74.257
+73453,AN,Coastal waters from Great Egg Inlet to Cape May NJ out 20 nm,39.05,-74.545
+73454,AN,Coastal waters from Cape May NJ to Cape Henlopen DE out 20 nm,38.794,-74.811
+73455,AN,Coastal waters from Cape Henlopen to Fenwick Island DE out 20 nm,38.572,-74.91
+73470,AN,Waters from Sandy Hook NJ to Manasquan Inlet NJ out 20 to 40 nm,40.049,-73.56
+73471,AN,Waters from Manasquan Inlet NJ to Little Egg Inlet NJ out 20 to 40 nm,39.616,-73.584
+73472,AN,Waters from Little Egg Inlet NJ to Great Egg Inlet NJ out 20 to 40 nm from 20 to 40 NM,39.192,-73.83
+73473,AN,Waters from Great Egg Inlet NJ to Cape May NJ out 20 to 40 nm,38.916,-74.131
+73475,AN,Waters from Cape May NJ to Fenwick Island DE out 20 to 40 nm,38.525,-74.457
+73500,AN,Synopsis for the Tidal Potomac and MD Portion of the Chesapeake Bay,,
+73530,AN,Chesapeake Bay north of Pooles Island MD,39.414,-76.124
+73531,AN,Chesapeake Bay from Pooles Island to Sandy Point MD,39.181,-76.345
+73532,AN,Chesapeake Bay from Sandy Point to North Beach MD,38.851,-76.424
+73533,AN,Chesapeake Bay from North Beach to Drum Point MD,38.541,-76.406
+73534,AN,Chesapeake Bay from Drum Point MD to Smith Point VA,38.104,-76.211
+73535,AN,Tidal Potomac from Key Bridge to Indian Head MD,38.741,-77.071
+73536,AN,Tidal Potomac from Indian Head to Cobb Island MD,38.393,-77.104
+73537,AN,Tidal Potomac from Cobb Island MD to Smith Point VA,38.102,-76.539
+73538,AN,Patapsco River including Baltimore Harbor,39.218,-76.528
+73539,AN,Chester River to Queenstown MD,39.043,-76.254
+73540,AN,Eastern Bay,38.869,-76.273
+73541,AN,Choptank River to Cambridge MD and the Little Choptank River,38.626,-76.254
+73542,AN,Patuxent River to Broomes Island MD,38.349,-76.485
+73543,AN,Tangier Sound and the inland waters surrounding Bloodsworth Island,38.139,-75.986
+73600,AN,Synopsis for Fenwick Island DE to Currituck Beach Light NC,,
+73630,AN,Chesapeake Bay from Smith Point to Windmill Point VA,37.776,-76.014
+73631,AN,Chesapeake Bay from Windmill Point to New Point Comfort VA,37.476,-76.119
+73632,AN,Chesapeake Bay from New Point Comfort to Little Creek VA,37.166,-76.195
+73633,AN,Currituck Sound,36.403,-75.897
+73634,AN,Chesapeake Bay from Little Creek VA to Cape Henry VA including the Chesapeake Bay Bridge Tunnel,36.994,-76.042
+73635,AN,Rappahannock River from Urbanna to Windmill Point,37.631,-76.446
+73636,AN,York River,37.28,-76.527
+73637,AN,James River from Jamestown to the James River Bridge,37.098,-76.613
+73638,AN,James River from James River Bridge to Hampton Roads Bridge-Tunnel,36.956,-76.401
+73650,AN,Coastal waters from Fenwick Island DE to Chincoteague VA out 20 nm,38.186,-75.005
+73652,AN,Coastal waters from Chincoteague to Parramore Island VA out 20 nm,37.767,-75.292
+73654,AN,Coastal waters from Parramore Island to Cape Charles Light VA out 20 nm,37.304,-75.619
+73656,AN,Coastal Waters from Cape Charles Light to Virginia-North Carolina border out to 20 nm,36.819,-75.765
+73658,AN,Coastal waters from NC VA border to Currituck Beach Light NC out 20 nm,36.384,-75.648
+73670,AN,Waters from Fenwick Island DE to Chintoteague VA from 20 to 40 nm,38.086,-74.636
+73672,AN,Waters from Chincoteague VA to Parramore Island VA from 20 to 40 nm,37.651,-74.914
+73674,AN,Waters from Parramore Island VA to Cape Charles Light VA from 20 to 40 nm,37.238,-75.215
+73676,AN,Waters from Cape Charles Light to Virginia - North Carolina Border from 20 to 40 nm,36.792,-75.401
+73678,AN,Waters from NC VA border to Currituck Beach Light NC from 20 to 40 nm,36.385,-75.285
+73800,AN,Gulf of Maine to the Hague Line,42.982,-68.605
+73805,AN,Georges Bank between Cape Cod and 68W north of 1000 FM,41.186,-68.716
+73810,AN,South of New England between the Great South Channel and Montauk Point to 1000 FM,40.318,-70.203
+73815,AN,South of Long Island between Montauk Point and Sandy Hook to 1000 FM,40.022,-72.128
+73820,AN,Hudson Canyon to Baltimore Canyon to 1000 FM,38.988,-73.459
+73825,AN,Baltimore Canyon to Cape Charles Light to 100 NM offshore,37.495,-74.447
+73828,AN,Cape Charles Light to Currituck Beach Light to 100 NM offshore,36.398,-74.671
+73830,AN,Currituck Beach Light to Cape Hatteras to 100 NM offshore,35.374,-74.541
+73833,AN,Cape Hatteras to Cape Fear to 100 NM Offshore.,34.211,-75.482
+73835,AN,Cape Fear to 31N to 1000 FM,32.357,-78.02
+73898,AN,Synopsis for New England Continental Shelf and Slope waters to the Hague Line except to 1000 fathoms south of New Eng.,,
+73899,AN,Synopsis for Offshore Waters of the Mid-Atlantic U.S. coast,,
+73900,AN,Georges Bank between 68W and the Hague Line,41.197,-67.277
+73905,AN,East of 69W to the Hague Line between 1000 FM and 39N,39.72,-66.932
+73910,AN,East of 69W and south of 39N to 250 NM offshore,38.268,-67.796
+73915,AN,Between 1000FM and 38.5 N west of 69 W,39.045,-70.641
+73920,AN,Baltimore Canyon to 69W east of 1000 FM and south of 38.5N to 250 NM offshore,37.761,-70.902
+73925,AN,Baltimore Canyon to Hatteras Canyon between 100 NM and 250 NM offshore,35.959,-72.057
+73930,AN,Hatteras Canyon to Cape Fear between 100 NM and 250 NM offshore,33.648,-72.944
+73935,AN,Cape Fear to 31N east of 1000 FM to 250 NM offshore,31.969,-74.936
+75000,AM,"Western North Atlantic Ocean, and along U.S. East Coast, south of Currituck Beach Light, N.C., following the coastline into Gulf of America to Ocean Reef FL., including the Caribbean",,
+75001,AM,Synopsis for Synopsis for Caribbean Sea and Tropical N Atlantic,,
+75040,AM,Caribbean N of 18N W of 85W including Yucatan Basin,-86.085,19.835
+75041,AM,Caribbean N of 20N E of 85W,-81.706,20.855
+75042,AM,Caribbean from 18N-20N between 80W-85W including Cayman Basin,-82.504,18.997
+75043,AM,Caribbean from 18N-20N between 76W-80W,-78.142,19.015
+75044,AM,Caribbean approaches to the Windward Passage,-74.814,19.03
+75045,AM,Gulf of Honduras,-86.507,16.989
+75046,AM,Caribbean from 15N to 18N between 80W and 85W,-82.298,16.622
+75047,AM,Caribbean from 15N to 18N between 76W and 80W,-78.018,16.478
+75048,AM,Caribbean from 15N to 18N between 72W and 76W,-74.002,16.492
+75049,AM,Caribbean N of 15N between 68W and 72W,-69.95,16.489
+75050,AM,Caribbean N of 15N between 64W and 68W,-66.0,16.0
+75051,AM,Offshore Waters Leeward Islands,-62.006,17.012
+75052,AM,Tropical N Atlantic from 15N to 19N between 55W and 60W,-57.5,17.0
+75053,AM,W Central Caribbean from 11N to 15N W of 80W,-81.651,12.933
+75054,AM,Caribbean from 11N to 15N between 76W and 80W including Colombia Basin,-78.0,12.993
+75055,AM,Caribbean from 11N to 15N between 72W and 76W,-74.134,13.229
+75056,AM,Caribbean S of 15N between 68W and 72W,-69.896,13.394
+75057,AM,Caribbean S of 15N between 64W and 68W including Venezuela Basin,-66.007,12.844
+75058,AM,Offshore Waters Windward Islands including Trinidad and Tobago,-61.817,12.443
+75059,AM,Tropical N Atlantic from 11N and 15N between 55W and 60W,-57.496,13.0
+75060,AM,SW Caribbean S of 11N W of 80W,-81.467,10.183
+75061,AM,SW Caribbean S of 11N E of 80W including the approaches to the Panama Canal,-77.706,10.162
+75062,AM,Tropical N Atlantic from 7N and 11N between 55W and 60W,-57.339,9.123
+75063,AM,Atlantic from 29N to 31N W of 77W,-78.593,30.039
+75064,AM,Atlantic from 29N to 31N between 74W and 77W,-75.5,30.004
+75065,AM,Atlantic from 29N to 31N between 70W and 74W,-72.001,30.002
+75066,AM,Atlantic from 29N to 31N between 65W and 70W,-67.5,30.0
+75067,AM,Atlantic from 29N to 31N between 60W and 65W,-62.5,30.0
+75068,AM,Atlantic from 29N to 31N between 55W and 60W,-57.5,30.0
+75069,AM,Atlantic from 27N to 29N W of 77W,-78.198,28.044
+75070,AM,Atlantic from 27N to 29N between 74W and 77W,-75.5,28.0
+75071,AM,Atlantic from 27N to 29N between 70W and 74W,-72.0,28.0
+75072,AM,Atlantic from 27N to 29N between 65W and 70W,-67.5,28.0
+75073,AM,Atlantic from 27N to 29N between 60W and 65W,-62.5,28.0
+75074,AM,Atlantic from 27N to 29N between 55W and 60W,-57.5,28.0
+75075,AM,Northern Bahamas from 24N to 27N,-77.3,25.252
+75076,AM,Atlantic from 22N to 27N E of Bahamas to 70W,-73.028,26.056
+75077,AM,Atlantic from 22N to 27N between 65W and 70W,-67.5,26.0
+75078,AM,Atlantic from 25N to 27N between 60W and 65W,-62.5,26.0
+75079,AM,Atlantic from 25N to 27N between 55W and 60W,-57.5,26.0
+75080,AM,Central Bahamas including Cay Sal Bank,-76.273,23.052
+75081,AM,Atlantic from 22N to 25N E of Bahamas to 70W,-71.867,23.711
+75082,AM,Atlantic from 22N to 25N between 65W and 70W,-67.5,23.5
+75083,AM,Atlantic from 22N to 25N between 60W and 65W,-62.5,23.5
+75084,AM,Atlantic from 22N to 25N between 55W and 60W,-57.5,23.5
+75085,AM,Atlantic S of 22N W of 70W including approaches to the Windward Passage,-72.794,21.141
+75086,AM,Atlantic S of 22N between 65W and 70W including Puerto Rico Trench,-67.522,20.668
+75087,AM,Atlantic from 19N to 22N between 60W and 65W,-62.431,20.543
+75088,AM,Atlantic from 19N to 22N between 55W and 60W,-57.5,20.5
+75100,AM,Synopsis for Currituck Beach Light NC to North of Surf City NC out 20 NM,,
+75101,AM,Synopsis for the SW North Atlantic including the Bahamas,,
+75131,AM,Alligator River,35.832,-76.008
+75135,AM,Pamlico Sound,35.332,-75.957
+75136,AM,Pamlico and Pungo Rivers,35.421,-76.671
+75137,AM,Neuse and Bay Rivers,35.047,-76.681
+75150,AM,S of Currituck Beach Light NC to Oregon Inlet NC out to 20 nm,36.0,-75.46
+75152,AM,S of Oregon Inlet NC to Cape Hatteras NC out to 20 nm,35.479,-75.316
+75154,AM,S of Cape Hatteras NC to Ocracoke Inlet NC out to 20 nm,35.053,-75.59
+75156,AM,S of Ocracoke Inlet NC to Cape Lookout NC out to 20 nm,34.761,-76.169
+75158,AM,S of Cape Lookout NC to Surf City NC out to 20 nm,34.477,-76.886
+75170,AM,Waters from Currituck Beach Light to Oregon Inlet NC from 20 to 40 nm,36.013,-75.089
+75172,AM,Waters from Oregon Inlet to Cape Hatteras NC from 20 to 40 nm,35.443,-74.984
+75174,AM,Waters from Cape Hatteras to Ocracoke Inlet NC from 20 to 40 nm,34.858,-75.24
+75176,AM,Waters fromOcracoke Inlet to Cape Lookout NC from 20 to 40 nm,34.545,-75.85
+75178,AM,Waters from Cape Lookout to Surf City NC from 20 to 40 nm,34.139,-76.604
+75200,AM,Synopsis for Surf City NC to South Santee River SC out 20 NM,,
+75230,AM,Albemarle Sound,36.035,-76.18
+75231,AM,Croatan and Roanoke Sounds,35.897,-75.691
+75250,AM,Coastal waters from Surf City to Cape Fear NC out 20 nm,34.062,-77.649
+75252,AM,Coastal waters from Cape Fear NC to Little River Inlet SC out 20 nm,33.717,-78.102
+75254,AM,Coastal waters from Little River Inlet to Murrells Inlet SC out 20 nm,33.614,-78.652
+75256,AM,Coastal waters from Murrells Inlet to South Santee River SC out 20 nm,33.251,-78.988
+75270,AM,Waters from Surf City to Cape Fear NC from 20 to 40 nm,33.842,-77.378
+75272,AM,Waters from Cape Fear NC to Little River Inlet SC from 20 to 40 nm,33.411,-77.761
+75274,AM,Waters from Little River Inlet to Murrells Inlet SC from 20 to 40 nm,33.359,-78.243
+75276,AM,Waters from Murrells Inlet NC to South Santee River SC from 20 to 40 nm,33.1,-78.665
+75300,AM,Synopsis for South Santee River SC to Savannah GA out 20 NM and Savannah GA to Altamaha Sound GA out 60 NM,,
+75305,AM,Synopsis for Savannah to Altamaha Sound,,
+75330,AM,Charleston Harbor,32.774,-79.903
+75350,AM,Coastal waters from South Santee River to Edisto Beach SC out 20 nm,32.7,-79.602
+75352,AM,Coastal waters from Edisto Beach SC to Savannah GA out 20 nm,32.184,-80.417
+75354,AM,Coastal waters from Savannah GA to Altamaha Sound GA out 20 nm ...including Grays Reef National Marine Sanctuary,31.617,-80.942
+75370,AM,Waters from South Santee River SC to Edisto Beach SC extending from 20 nm to 40 nm,32.53,-79.231
+75372,AM,Waters from Edisto Beach SC to Savannah GA extending from 20 nm to 40 nm,32.012,-80.029
+75374,AM,Waters from Savannah GA to Altamaha Sound GA extending from 20 nm to 60 nm,31.471,-80.43
+75400,AM,Synopsis for Altamaha Sound GA to Flagler Beach FL out to 60 nm,,
+75450,AM,Coastal waters from Altamaha Sound to Fernandina Beach FL out 20 NM,30.976,-81.244
+75452,AM,Coastal waters from Fernandina Beach to St. Augustine FL out 20 NM,30.288,-81.212
+75454,AM,Coastal waters from St. Augustine to Flagler Beach FL out 20 NM,29.686,-81.035
+75470,AM,Waters from Altamaha Sound GA to Fernandina Beach FL from 20 to 60 NM,30.894,-80.705
+75472,AM,Waters from Fernandina Beach to St. Augustine FL from 20 to 60 NM,30.25,-80.683
+75474,AM,Waters from St. Augustine to Flagler Beach FL from 20 to 60 NM,29.687,-80.477
+75500,AM,Synopsis for Flagler Beach to Jupiter Inlet out to 60 nm,,
+75550,AM,Flagler Beach to Volusia-Brevard County Line 0-20 nm,29.147,-80.764
+75552,AM,Volusia-Brevard County Line to Sebastian Inlet 0-20 nm,28.369,-80.442
+75555,AM,Sebastian Inlet to Jupiter Inlet 0-20 nm,27.42,-80.092
+75570,AM,Flagler Beach to Volusia-Brevard County Line 20-60 nm,29.185,-80.196
+75572,AM,Volusia-Brevard County Line to Sebastian Inlet 20-60 nm,28.419,-79.88
+75575,AM,Sebastian Inlet to Jupiter Inlet 20-60 nm,27.464,-79.557
+75600,AM,Synopsis for Jupiter Inlet to Ocean Reef out to 60 nm and for East Cape Sable to Bonita Beach FL out to 60 nm,,
+75610,AM,Lake Okeechobee,26.943,-80.835
+75630,AM,Biscayne Bay,25.556,-80.242
+75650,AM,Coastal waters from Jupiter Inlet to Deerfield Beach FL out 20 NM,26.632,-79.882
+75651,AM,Coastal waters from Deerfield Beach to Ocean Reef FL out 20 NM,25.752,-79.981
+75670,AM,Waters from Jupiter Inlet to Deerfield Beach FL from 20 to 60 NM,26.589,-79.373
+75671,AM,Waters from Deerfield Beach to Ocean Reef FL from 20 to 60 NM excluding the territorial waters of Bahamas,25.515,-79.51
+75700,AM,Synopsis for PR and U.S. Virgin Islands coastal waters,,
+75711,AM,Atlantic Waters of Puerto Rico and the U.S. Virgin Islands from 10 NM to 17N,19.048,-66.023
+75712,AM,Coastal Waters of Northern Puerto Rico out 10 NM,18.553,-66.442
+75716,AM,Coastal Waters from Cabo San Juan to the waters between Anegada Island and Virgin Gorda and north 10 nm,18.477,-64.95
+75723,AM,Anegada Passage east of Virgin Gorda and Saint Croix south to 17N,17.71,-64.289
+75726,AM,"Coastal waters east of Puerto Rico, around Vieques, and around and just north of Culebra and Saint John",18.181,-65.145
+75733,AM,"Caribbean waters of Puerto Rico from 10 NM to 17 N, including the coastal waters of Saint Croix",17.458,-65.893
+75735,AM,Coastal Waters of Southern Puerto Rico out 10 NM,17.869,-66.553
+75741,AM,Mona Passage Southward to 17N,17.74,-67.691
+75742,AM,Coastal Waters OF Northwestern Puerto Rico out 10 NM,18.341,-67.302
+75745,AM,Coastal Waters OF Southwestern Puerto Rico out 10 NM,18.064,-67.284
+77000,GM,"Gulf Marine zones, and along the U.S. Gulf Coast from the Mexican border to Ocean Reef FL.",,
+77001,GM,Synopsis for the Gulf of America,,
+77005,GM,Synopsis for Florida Keys,,
+77031,GM,"Florida Bay including Barnes Sound, Blackwater Sound, and Buttonwood Sound",25.075,-80.687
+77032,GM,Bayside and Gulf side from Craig Key to West End of Seven Mile Bridge,24.921,-81.134
+77033,GM,Gulf waters from East Cape Sable to Chokoloskee 20 to 60 NM out and beyond 5 fathoms,25.114,-82.03
+77034,GM,Gulf waters including Dry Tortugas and Rebecca Shoal Channel,24.727,-82.849
+77035,GM,Gulf waters from West End of Seven Mile Bridge to Halfmoon Shoal out to 5 Fathoms,24.715,-81.721
+77040,GM,NW Gulf including Stetson Bank,,
+77041,GM,SW Louisiana Offshore Waters including Flower Garden Bank Marine Sanctuary,,
+77042,GM,Hawk Channel from Ocean Reef to Craig Key out to the reef,25.056,-80.429
+77043,GM,Hawk Channel from Craig Key to west end of Seven Mile Bridge out to the reef,24.713,-80.981
+77044,GM,Hawk Channel from west end of Seven Mile Bridge to Halfmoon Shoal out to the reef,24.536,-81.874
+77045,GM,W Central Gulf from 22N to 26N between 91W and 94W,,
+77046,GM,Central Gulf from 22N to 26N between 87W and 91W,-89.0,24.0
+77047,GM,SE Gulf from 22N to 26N E of 87W including Straits of Florida,-84.956,24.158
+77048,GM,SW Gulf S of 22N W of 94W,,
+77049,GM,Central Bay of Campeche,,
+77050,GM,E Bay of Campeche including Campeche Bank,,
+77052,GM,Straits of Florida from Ocean Reef to Craig Key out 20 NM,24.902,-80.325
+77053,GM,Straits of Florida from Craig Key to west end of Seven Mile Bridge out 20 NM,24.554,-80.898
+77054,GM,Straits of Florida from west end of Seven Mile Bridge to south of Halfmoon Shoal out 20 NM,24.358,-81.82
+77055,GM,Straits of Florida from Halfmoon Shoal to 20 NM west of Dry Tortugas out 20 NM,24.326,-82.89
+77056,GM,N Central Gulf Offshore Waters,-88.786,27.246
+77057,GM,NE Gulf N of 26N E of 87W,-85.318,27.382
+77058,GM,W Central Gulf from 22N to 26N W of 94W,,
+77072,GM,Straits of Florida from Ocean Reef to Craig Key 20 to 60 NM out,24.524,-80.047
+77073,GM,Straits of Florida from Craig Key to west end of Seven Mile Bridge 20 to 60 NM out,24.087,-80.75
+77074,GM,Straits of Florida from west end of Seven Mile Bridge to south of Halfmoon Shoal 20 to 60 NM out,23.895,-81.78
+77075,GM,Straits of Florida from Halfmoon Shoal to 20 NM west of Dry Tortugas 20 to 60 NM out,23.909,-82.848
+77100,GM,Synopsis from Baffin Bay to the Rio Grande River TX out 60 NM,,
+77130,GM,Laguna Madre From the Port Of Brownsville to the Arroyo Colorado,26.236,-97.257
+77132,GM,Laguna Madre From The Arroyo Colorado To 5 NM North Of Port Mansfield TX,26.492,-97.349
+77135,GM,Laguna Madre From 5 nm North Of Port Mansfield To Baffin Bay TX,26.877,-97.434
+77150,GM,Coastal waters from Port Mansfield TX to the Rio Grande River out 20 NM,26.278,-97.001
+77155,GM,Coastal waters from Baffin Bay to Port Mansfield TX out 20 NM,26.907,-97.158
+77170,GM,Waters from Port Mansfield TX to the Rio Grande River from 20 to 60 NM,26.274,-96.413
+77175,GM,Waters from Baffin Bay to Port Mansfield TX from 20 to 60 NM,26.864,-96.576
+77200,GM,Synopsis from Matagorda Ship Channel to Baffin Bay,,
+77231,GM,Baffin Bay and Upper Laguna Madre,27.356,-97.477
+77232,GM,Corpus Christi and Nueces Bays,27.776,-97.276
+77236,GM,"Copano, Aransas, and Redfish Bays",28.051,-97.044
+77237,GM,"San Antonio, Mesquite, and Espiritu Santo Bays",28.304,-96.676
+77250,GM,Coastal waters from Baffin Bay to Port Aransas out 20 NM,27.5,-97.048
+77255,GM,Coastal waters from Port Aransas to Matagorda Ship Channel out 20 NM,28.027,-96.579
+77270,GM,Waters from Baffin Bay to Port Aransas from 20 to 60 NM,27.339,-96.521
+77275,GM,Waters from Port Aransas to Matagorda Ship Channel from 20 to 60 NM,27.718,-96.117
+77300,GM,Synopsis for High Island to Matagorda Ship Channel,,
+77330,GM,Matagorda Bay,28.598,-96.275
+77335,GM,Galveston Bay,29.491,-94.859
+77350,GM,Coastal waters from Freeport to Matagorda Ship Channel TX out 20 NM,28.522,-95.734
+77355,GM,Coastal waters from High Island to Freeport TX out 20 NM,29.096,-94.783
+77370,GM,Waters from Freeport to Matagorda Ship Channel TX from 20 to 60 NM,28.12,-95.394
+77375,GM,Waters from High Island to Freeport TX from 20 to 60 NM,28.621,-94.546
+77400,GM,Synopsis for Synopsis for Lower Atchafalaya River LA to High Island TX,,
+77430,GM,Sabine Lake,29.877,-93.849
+77432,GM,Calcasieu Lake,29.914,-93.314
+77435,GM,Vermilion and West Cote Blanche Bay,29.697,-91.897
+77436,GM,Atchafalaya and East Cote Blanche,29.475,-91.47
+77450,GM,Coastal waters from Cameron LA to High Island TX out 20 NM,29.525,-93.835
+77452,GM,Coastal waters from Intracoastal City to Cameron LA out 20 NM,29.468,-92.745
+77455,GM,Coastal waters from Lower Atchafalaya River to Intracoastal City LA out 20 NM,29.29,-91.669
+77470,GM,Waters from Cameron LA to High Island TX from 20 to 60 NM,29.029,-93.751
+77472,GM,Waters from Intracoastal City to Cameron LA from 20 to 60 NM,28.942,-92.748
+77475,GM,Waters from Lower Atchafalaya River to Intracoastal City LA from 20 to 60 NM,28.658,-91.701
+77500,GM,Synopsis for Pascagoula to SW Pass Mississippi,,
+77501,GM,Synopsis for Southwest Pass of the Mississippi River to Atchafalaya River,,
+77530,GM,Lake Pontchartrain and Lake Maurepas,30.192,-90.173
+77532,GM,Mississippi Sound,30.257,-88.997
+77534,GM,Lake Borgne,30.019,-89.656
+77536,GM,Chandeleur Sound,29.929,-89.081
+77538,GM,Breton Sound,29.579,-89.391
+77550,GM,Coastal Waters from Port Fourchon LA to Lower Atchafalaya River LA out 20 nm,28.974,-90.708
+77552,GM,Coastal waters from the Southwest Pass of the Mississippi River to Port Fourchon Louisiana out 20 NM,29.007,-89.724
+77555,GM,Coastal Waters from Boothville LA to Southwest Pass of the Mississippi River out 20 nm,29.09,-88.991
+77557,GM,Coastal waters from Pascagoula Mississippi to Stake Island out 20 NM,29.848,-88.648
+77570,GM,Coastal waters from Port Fourchon Louisiana to Lower Atchafalaya River LA from 20 to 60 NM,28.384,-90.689
+77572,GM,Coastal waters from Southwest Pass of the Mississippi River to Port Fourchon Louisiana from 20 to 60 NM,28.337,-89.637
+77575,GM,Coastal Waters from Stake Island LA to Southwest Pass of the Mississippi River from 20 to 60 nm,28.494,-88.68
+77577,GM,Coastal waters from Pascagoula Mississippi to Stake Island Louisiana out 20 to 60 NM,29.229,-88.272
+77600,GM,Synopsis for Pascagoula MS To Okaloosa Walton County Line FL,,
+77606,GM,Synopsis for Jupiter Inlet to Ocean Reef FL out to 60 nm and for East Cape Sable to Bonita Beach,,
+77630,GM,North Mobile Bay,30.599,-87.995
+77631,GM,South Mobile Bay,30.338,-87.963
+77632,GM,Mississippi Sound,30.308,-88.28
+77633,GM,Perdido Bay Area,30.347,-87.478
+77634,GM,Pensacola Bay Area including Santa Rosa Sound,30.43,-87.081
+77635,GM,Western Choctawhatchee Bay,30.437,-86.488
+77636,GM,Eastern Choctawhatchee Bay,30.431,-86.257
+77650,GM,Coastal waters from Pensacola FL to Pascagoula MS out 20 NM,30.085,-87.78
+77655,GM,Coastal waters from Okaloosa-Walton County Line to Pensacola FL out 20 NM,30.205,-86.799
+77656,GM,Coastal waters from Chokoloskee to Bonita Beach FL out 20 NM,25.954,-81.873
+77657,GM,Coastal waters from East Cape Sable to Chokoloskee FL out 20 NM,25.454,-81.389
+77670,GM,Waters from Pensacola FL to Pascagoula MS from 20 to 60 NM,29.605,-87.649
+77675,GM,Waters from Okaloosa-Walton County Line to Pensacola FL from 20 to 60 NM,29.7,-86.772
+77676,GM,Waters from Chokoloskee to Bonita Beach FL from 20 to 60 NM,25.814,-82.419
+77700,GM,Synopsis for Suwannee River to Okaloosa-Walton County Line out to 60 nm,,
+77730,GM,Apalachee Bay or Coastal Waters From Keaton Beach to Ochlockonee River Fl out to 20 Nm,29.924,-84.026
+77735,GM,St. Andrews Bay Waterways,30.179,-85.66
+77751,GM,Coastal waters from Okaloosa-Walton County Line to Mexico Beach out 20 NM,29.98,-85.893
+77752,GM,Coastal Waters from Mexico Beach to Apalachicola out 20 NM,29.526,-85.267
+77755,GM,Coastal Waters From Ochlockonee River to Apalachicola FL out to 20 Nm,29.625,-84.592
+77765,GM,Coastal waters from Suwannee River to Keaton Beach out 20 NM,29.511,-83.569
+77770,GM,Waters from Okaloosa-Walton County Line to Mexico Beach from 20 to 60 NM,29.446,-86.073
+77772,GM,Waters from Mexico Beach to Apalachicola FL from 20 to 60 NM,28.978,-85.391
+77775,GM,Waters from Suwannee River to Apalachicola FL from 20 to 60 NM,29.141,-84.33
+77800,GM,Synopsis for Bonita Beach to Suwannee River,,
+77830,GM,Tampa Bay waters,27.755,-82.596
+77836,GM,Charlotte Harbor and Pine Island Sound,26.701,-82.138
+77850,GM,Coastal waters from Tarpon Springs to Suwannee River FL out 20 NM,28.752,-82.987
+77853,GM,Coastal waters from Englewood to Tarpon Springs FL out 20 NM,27.52,-82.841
+77856,GM,Coastal waters from Bonita Beach to Englewood FL out 20 NM,26.537,-82.327
+77870,GM,Waters from Tarpon Springs to Suwannee River FL out 20 to 60 NM,28.601,-83.501
+77873,GM,Waters from Englewood to Tarpon Springs FL out 20 to 60 NM,27.436,-83.317
+77876,GM,Waters from Bonita Beach to Englewood FL out 20 to 60 NM,26.424,-82.824
+91000,LS,Lake Superior,,
+91121,LS,Chequamegon Bay-Bayfield to Oak Point WI,46.687,-90.834
+91140,LS,Grand Portage to Grand Marais MN,47.838,-89.862
+91141,LS,Grand Marais to Taconite Harbor MN,47.618,-90.612
+91142,LS,Taconite Harbor to Silver Bay Harbor MN,47.38,-91.067
+91143,LS,Silver Bay Harbor to Two Harbors MN,47.123,-91.422
+91144,LS,Two Harbors to Duluth MN,46.887,-91.821
+91145,LS,Duluth MN to Port Wing WI,46.76,-91.773
+91146,LS,Port Wing to Sand Island WI,46.906,-91.189
+91147,LS,Sand Island to Bayfield WI,46.938,-90.8
+91148,LS,Oak Point to Saxon Harbor WI,46.669,-90.603
+91150,LS,Outer Apostle Islands Beyond 5 NM from Mainland,46.99,-90.544
+91162,LS,Lake Superior west of a line from Saxon Harbor WI to Grand Portage MN beyond 5NM,47.296,-90.588
+91240,LS,Saxon Harbor WI to Black River MI,46.663,-90.252
+91241,LS,Black River To Ontonagon MI,46.841,-89.712
+91242,LS,Ontonagon to Upper Entrance of Portage Canal MI,47.09,-88.981
+91243,LS,Upper Entrance of Portage Canal to Eagle River MI,47.37,-88.473
+91244,LS,Eagle River to Manitou Island MI,47.498,-87.946
+91245,LS,Manitou Island to Point Isabelle MI,47.358,-87.764
+91246,LS,Point Isabelle to Lower Entrance of Portage Canal MI,47.142,-88.198
+91247,LS,Portage Lake to Huron Island MI to Lower Entrance of Portage Canal To Huron Islands MI Including Keweenaw and Huron Bays,46.939,-88.232
+91248,LS,Huron Islands to Marquette MI,46.805,-87.625
+91249,LS,Marquette to Munising MI,46.538,-86.96
+91250,LS,Munising to Grand Marais MI,46.63,-86.341
+91251,LS,Grand Marais to Whitefish Point MI,46.758,-85.441
+91263,LS,Lake Superior from Saxon Harbor WI to Upper Entrance to Portage Canal MI 5NM off shore to the US/Canadian border including Isle Royal National Park,47.441,-89.354
+91264,LS,Lake Superior from Upper Entrance to Portage Canal to Manitou Island MI 5NM off shore to the US/Canadian Border,47.833,-88.142
+91265,LS,Lake Superior West of Line from Manitou Island to Marquette MI Beyond 5NM from shore,47.07,-87.698
+91266,LS,Lake Superior East of a line from Manitou Island to Marquette MI and West of a line from Grand Marais MI to the US/Canadian Border Beyond 5NM from shore,47.188,-86.839
+91267,LS,Lake Superior from Grand Marais MI to Whitefish Point MI 5NM off shore to the US/Canadian border,46.982,-85.587
+91321,LS,Whitefish Bay (U.S. Portion)/Whitefish Point to Point Iroquois MI,46.6,-84.87
+91322,LS,St. Marys River Point Iroquois to E. Potagannissing Bay,46.191,-84.015
+92000,LM,Lake Michigan,,
+92043,LM,New Buffalo MI to St Joseph MI,41.962,-86.637
+92046,LM,Michigan City IN to New Buffalo MI,41.794,-86.855
+92080,LM,Lake Michigan Michigan City IN to St. Joseph MI 5 NM offshore to mid-line of lake.,41.999,-86.814
+92221,LM,Green Bay North of line from Cedar River MI to Rock Island Passage,45.608,-86.941
+92248,LM,Seul Choix Point to Point Detour MI,45.809,-86.282
+92250,LM,5NM East of a line from Fairport MI to Rock Island Passage,45.493,-86.671
+92261,LM,Lake Michigan from Seul Choix Point to Rock Island Passage 5NM offshore to Mid Lake,45.591,-86.29
+92323,LM,Grand Traverse Bay south of a line Grand Traverse Light to Norwood MI,45.003,-85.504
+92341,LM,Seul Choix Point to 5NM West of Mackinac Bridge,45.971,-85.383
+92342,LM,Norwood MI to 5NM West of Mackinac Bridge including Little Traverse Bay,45.54,-85.148
+92344,LM,Sleeping Bear Point to Grand Traverse Light MI,45.084,-85.789
+92345,LM,Point Betsie to Sleeping Bear Point MI,44.84,-86.128
+92346,LM,Manistee to Point Betsie MI,44.519,-86.296
+92362,LM,Lake Michigan South of a line from Seul Choix Point to the Mackinac Bridge and North of a line from Charlevoix MI to South Fox Island 5NM offshore,45.619,-85.612
+92364,LM,Lake Michigan from Charlevoix to Point Betsie MI 5NM Offshore to mid lake,45.039,-86.239
+92366,LM,Lake Michigan from Point Betsie to Manistee MI 5NM offshore to Mid Lake,44.472,-86.613
+92521,LM,Green Bay south of line from Cedar River to Rock Island Passage and north of a line from Oconto WI to Little Sturgeon Bay WI,45.142,-87.385
+92522,LM,Green Bay south of line from Oconto WI to Little Sturgeon Bay WI,44.726,-87.837
+92541,LM,Rock Island Passage to Sturgeon Bay WI,45.11,-87.004
+92542,LM,Sturgeon Bay to Two Rivers WI,44.478,-87.416
+92543,LM,Two Rivers to Sheboygan WI,44.038,-87.604
+92563,LM,Lake Michigan from Rock Island Passage to Sturgeon Bay WI 5NM offshore to mid lake,45.05,-86.751
+92565,LM,Lake Michigan from Sturgeon Bay to Two Rivers WI 5NM offshore to Mid Lake,44.467,-87.125
+92567,LM,Lake Michigan from Two Rivers to Sheboygan WI 5NM offshore to Mid Lake,44.016,-87.281
+92643,LM,Sheboygan to Port Washington WI,43.627,-87.716
+92644,LM,Port Washington to North Point Light WI,43.211,-87.846
+92645,LM,North Point Light to Wind Point WI,42.916,-87.79
+92646,LM,Wind Point WI to Winthrop Harbor IL,42.635,-87.75
+92669,LM,Lake Michigan from Sheboygan to Port Washington WI 5NM offshore to Mid Lake,43.612,-87.408
+92671,LM,Lake Michigan from Port Washington to North Point Light WI 5NM offshore to Mid Lake,43.212,-87.457
+92673,LM,Lake Michigan from North Point Light to Wind Point WI 5NM offshore to Mid Lake,42.922,-87.408
+92675,LM,Lake Michigan from Wind Point WI to Winthrop Harbor IL 5NM offshore to Mid Lake,42.621,-87.372
+92740,LM,Winthrop Harbor to Wilmette Harbor IL,42.271,-87.745
+92741,LM,Wilmette Harbor to Northerly Island IL,41.977,-87.599
+92742,LM,Northerly Island to Calumet Harbor IL,41.803,-87.527
+92743,LM,Calumet Harbor IL to Gary IN,41.7,-87.415
+92744,LM,Gary to Burns Harbor IN,41.664,-87.251
+92745,LM,Burns Harbor to Michigan City IN,41.714,-87.049
+92777,LM,Lake Michigan from Winthrop Harbor to Wilmette Harbor IL 5NM offshore to Mid Lake,42.292,-87.355
+92779,LM,Lake Michigan from Wilmette Harbor to Michigan City in 5NM offshore to Mid Lake,41.934,-87.249
+92844,LM,St Joseph to South Haven MI,42.265,-86.413
+92845,LM,South Haven to Holland MI,42.594,-86.274
+92846,LM,Holland to Grand Haven MI,42.915,-86.262
+92847,LM,Grand Haven to Whitehall MI,43.234,-86.39
+92848,LM,Whitehall to Pentwater MI,43.603,-86.539
+92849,LM,Pentwater to Manistee MI,44.038,-86.486
+92868,LM,Lake Michigan from Pentwater to Manistee MI 5NM offshore to Mid Lake,44.018,-86.773
+92870,LM,Lake Michigan from Whitehall to Pentwater MI 5NM offshore to Mid Lake,43.595,-86.864
+92872,LM,Lake Michigan from Grand Haven to Whitehall MI 5NM offshore to Mid Lake,43.221,-86.774
+92874,LM,Lake Michigan from Holland to Grand Haven MI 5NM offshore to Mid Lake,42.916,-86.69
+92876,LM,Lake Michigan from South Haven to Holland MI 5NM offshore to Mid lake,42.614,-86.675
+92878,LM,Lake Michigan from St Joseph to South Haven MI 5NM offshore to Mid Lake,42.303,-86.719
+93000,LH,Lake Huron,,
+93345,LH,Straits of Mackinac within 5 nm of Mackinac Bridge including Mackinac Island,45.814,-84.707
+93346,LH,St Ignace to False Detour Channel,45.926,-84.16
+93347,LH,5NM East of Mackinac Bridge to Presque Isle Light MI including Bois Blanc Island,45.56,-84.012
+93348,LH,Presque Isle Light to Sturgeon Pt MI Including Thunder Bay National Marine Sanctuary,45.053,-83.297
+93349,LH,Sturgeon Pt to Alabaster MI,44.407,-83.329
+93361,LH,Lake Huron from 5NM east of Mackinac Bridge to Presque Isle Lt to the US/Canadian border beyond 5 NM from shore,45.685,-83.787
+93362,LH,Lake Huron from Presque Isle Lt. to Sturgeon Point MI 5NM off shore to US/Canadian border,45.113,-82.875
+93363,LH,Lake Huron from Sturgeon Point to Alabaster MI 5NM off shore to US/Canadian border,44.434,-82.782
+93421,LH,Outer Saginaw Bay SW of Alabaster to Port Austin MI to Inner Saginaw Bay,44.055,-83.337
+93422,LH,Inner Saginaw Bay SW of Point Au Gres to Bay Port MI,43.804,-83.698
+93441,LH,Port Austin to Harbor Beach MI,44.021,-82.768
+93442,LH,Harbor Beach to Port Sanilac MI,43.637,-82.552
+93443,LH,Port Sanilac to Port Huron MI,43.23,-82.464
+93462,LH,Lake Huron from Port Austin to Harbor Beach 5NM Off Shore to the US/Canadian border,44.032,-82.474
+93463,LH,Lake Huron from Harbor Beach to Port Sanilac 5NM Off Shore to US/Canadian border,43.648,-82.333
+93464,LH,Lake Huron from Port Sanilac to Port Huron 5NM Off Shore to US/Canadian border,43.314,-82.353
+94000,LC,Lake St. Clair,,
+94422,LC,St. Clair River,42.73,-82.51
+94423,LC,Detroit River,42.144,-83.13
+94460,LC,Lake St. Clair Open Lake (U.S. Portion),42.535,-82.766
+96000,LE,Lake Erie,,
+96020,LE,Upper Niagara River and Buffalo Harbor,43.029,-78.954
+96040,LE,Ripley to Dunkirk NY,42.406,-79.571
+96041,LE,Dunkirk to Buffalo NY,42.672,-79.122
+96061,LE,Ripley to Buffalo NY extending from 5NM off shoreline to US-Canadian border,42.53,-79.557
+96142,LE,Maumee Bay to Reno Beach OH,41.731,-83.318
+96143,LE,Reno Beach to The Islands OH,41.614,-82.944
+96144,LE,The Islands to Vermilion OH,41.467,-82.63
+96145,LE,Vermilion to Avon Point OH,41.51,-82.186
+96146,LE,Avon Point to Willowick OH,41.573,-81.738
+96147,LE,Willowick to Geneva-on-the Lake OH,41.814,-81.227
+96148,LE,Geneva-on-the-Lake to Conneaut OH,41.956,-80.758
+96149,LE,Conneaut OH to Ripley NY,42.157,-80.166
+96162,LE,Detroit River Lt. to Maumee Bay OH to Reno Beach OH beyond 5NM offshoreline to US-Canadian border,41.844,-83.179
+96163,LE,Reno Beach to The Islands OH beyond 5NM off shoreline to US-Canadian border,41.728,-82.938
+96164,LE,The Islands to Vermilion OH beyond 5 nm off shoreline to US-Canadian border,41.59,-82.481
+96165,LE,Vermilion to Avon Point OH beyond 5 nm off shoreline to US-Canadian border,41.667,-82.174
+96166,LE,Avon Point to Willowick OH beyond 5 nm off shoreline to US-Canadian border,41.792,-81.748
+96167,LE,Willowick to Geneva-on-the-Lake OH beyond 5NM off shoreline to US-Canadian border,42.025,-81.234
+96168,LE,Geneva-on-the-Lake to Conneaut OH beyond 5 nm off shoreline to US-Canadian border,42.141,-80.762
+96169,LE,Conneaut OH to Ripley NY beyond 5 nm off shoreline to US-Canadian border,42.271,-80.25
+96444,LE,Michigan Waters of Lake Erie from Detroit River to North Cape MI,41.875,-83.292
+97000,LO,Lake Ontario,,
+97030,LO,Lower Niagara River,43.191,-79.055
+97042,LO,Niagara River to Hamlin Beach NY,43.388,-78.527
+97043,LO,Hamlin Beach to Sodus Bay NY,43.334,-77.466
+97044,LO,Sodus Bay to Mexico Bay NY,43.444,-76.643
+97045,LO,Mexico Bay NY to the St. Lawrence River,43.875,-76.275
+97062,LO,Niagara River to Hamlin Beach NY beyond 5NM off shoreline to US-Canadian border,43.514,-78.549
+97063,LO,Hamlin Beach to Sodus Bay NY beyond 5NM off shoreline to US-Canadian border,43.502,-77.436
+97064,LO,Sodus Bay to Mexico Bay NY beyond 5NM off shoreline to US-Canadian border,43.608,-76.677
+97065,LO,Mexico Bay NY to the St. Lawrence River beyond 5NM off shoreline to US-Canadian border,43.853,-76.431
+98000,SL,St. Lawrence River above St. Regis,,
+98022,SL,St. Lawrence River above Ogdensburg NY,44.37,-75.935
+98024,SL,St. Lawrence River from Ogdensburg to St. Regis NY,44.892,-75.128

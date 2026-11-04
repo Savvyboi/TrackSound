@@ -1,5 +1,7 @@
 import type { FeatureCollection } from "geojson";
 import type { AddLayerObject, GeoJSONSource, Map as MLMap } from "maplibre-gl";
+import { ensureIcons, ICONS } from "./icons";
+import type { HeatImage } from "./geometry";
 
 export type OverlayData = {
   dark: boolean;
@@ -8,16 +10,14 @@ export type OverlayData = {
   enfNominal: 50 | 60 | null;
   region: FeatureCollection;
   regionDraft: FeatureCollection;
-  aHeat: FeatureCollection;
-  aHeatR0: number; // circle radius (px) at zoom 0 for one grid cell
+  aHeat: HeatImage | null;
   flights: FeatureCollection;
   flightsAttribution: string;
   flightHl: number[]; // flight idx highlighted (candidate's flights)
   flightSel: number | null;
   candLinks: FeatureCollection;
   candCpa: FeatureCollection;
-  lHeat: FeatureCollection;
-  lHeatR0: number;
+  lHeat: HeatImage | null;
   ranges: FeatureCollection;
   lMatch: FeatureCollection;
   strikes: FeatureCollection;
@@ -41,30 +41,26 @@ type SourceKey =
   | "enfGrid"
   | "region"
   | "regionDraft"
-  | "aHeat"
   | "flights"
   | "candLinks"
   | "candCpa"
-  | "lHeat"
   | "ranges"
   | "lMatch"
   | "strikes"
   | "lUnc"
   | "hoverAc";
 
-const SOURCES: SourceKey[] = ["land", "enfGrid", "region", "regionDraft", "aHeat", "lHeat", "flights", "ranges", "lMatch", "strikes", "candLinks", "candCpa", "lUnc", "hoverAc"];
+const SOURCES: SourceKey[] = ["land", "enfGrid", "region", "regionDraft", "flights", "ranges", "lMatch", "strikes", "candLinks", "candCpa", "lUnc", "hoverAc"];
+const IMAGE_SOURCES = ["aHeat", "lHeat"] as const;
+const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+const BLANK_COORDS: HeatImage["coordinates"] = [
+  [0, 0.0001],
+  [0.0001, 0.0001],
+  [0.0001, 0],
+  [0, 0],
+];
 
-const sid = (k: SourceKey) => `ts-${k}`;
-
-/** Score heat ramp (dark violet → magenta → orange → pale yellow), by normalised score `u`. */
-const HEAT_COLOR = ["interpolate", ["linear"], ["get", "u"], 0, "#3b0f70", 0.4, "#8c2981", 0.65, "#de4968", 0.85, "#fe9f6d", 1, "#fcfdbf"];
-const HEAT_OPACITY = ["interpolate", ["linear"], ["get", "u"], 0, 0.28, 0.5, 0.5, 0.8, 0.75, 1, 0.95];
-
-function radiusExpr(r0: number, minPx: number) {
-  // radius doubles per zoom level (one grid cell on the ground), but never smaller than minPx
-  const zA = Math.max(0, Math.min(21, Math.log2(minPx / Math.max(1e-9, r0))));
-  return ["interpolate", ["exponential", 2], ["zoom"], zA, minPx, 22, Math.max(minPx, r0 * 2 ** 22)];
-}
+const sid = (k: SourceKey | "aHeat" | "lHeat") => `ts-${k}`;
 
 type Layer = { id: string; group: keyof OverlayData["vis"]; spec: (d: OverlayData) => AddLayerObject };
 
@@ -102,32 +98,12 @@ const LAYERS: Layer[] = [
   {
     id: "ts-aheat",
     group: "aHeat",
-    spec: (d) => ({
-      id: "ts-aheat",
-      type: "circle",
-      source: sid("aHeat"),
-      paint: {
-        "circle-radius": radiusExpr(d.aHeatR0, 3) as never,
-        "circle-color": HEAT_COLOR as never,
-        "circle-opacity": HEAT_OPACITY as never,
-        "circle-blur": 0.15,
-      },
-    }),
+    spec: () => ({ id: "ts-aheat", type: "raster", source: "ts-aHeat", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0 } }),
   },
   {
     id: "ts-lheat",
     group: "lSolve",
-    spec: (d) => ({
-      id: "ts-lheat",
-      type: "circle",
-      source: sid("lHeat"),
-      paint: {
-        "circle-radius": radiusExpr(d.lHeatR0, 3) as never,
-        "circle-color": HEAT_COLOR as never,
-        "circle-opacity": HEAT_OPACITY as never,
-        "circle-blur": 0.15,
-      },
-    }),
+    spec: () => ({ id: "ts-lheat", type: "raster", source: "ts-lHeat", paint: { "raster-resampling": "nearest", "raster-fade-duration": 0 } }),
   },
   {
     id: "ts-flights",
@@ -138,7 +114,7 @@ const LAYERS: Layer[] = [
       source: sid("flights"),
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": d.dark ? "#7aa7ff" : "#2563eb",
+        "line-color": flightColor(d) as never,
         "line-opacity": 0.5,
         "line-width": ["interpolate", ["linear"], ["zoom"], 6, 0.8, 12, 1.6] as never,
       },
@@ -166,6 +142,26 @@ const LAYERS: Layer[] = [
       filter: ["==", ["get", "idx"], -1] as never,
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-color": "#fde047", "line-width": 3.5, "line-opacity": 1 },
+    }),
+  },
+  {
+    id: "ts-flights-icons",
+    group: "flights",
+    spec: () => ({
+      id: "ts-flights-icons",
+      type: "symbol",
+      source: sid("flights"),
+      layout: {
+        "symbol-placement": "line",
+        "symbol-spacing": 340,
+        "icon-image": ["case", ["==", ["get", "heli"], true], ICONS.heli.id, ICONS.plane.id] as never,
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 5, 0.5, 10, 0.75, 14, 0.95] as never,
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-keep-upright": false,
+      },
+      paint: { "icon-opacity": 0.8 },
     }),
   },
   {
@@ -264,13 +260,15 @@ const LAYERS: Layer[] = [
     group: "hoverAc",
     spec: () => ({
       id: "ts-hover-ac",
-      type: "circle",
+      type: "symbol",
       source: sid("hoverAc"),
-      paint: {
-        "circle-radius": 5,
-        "circle-color": "#fde047",
-        "circle-stroke-color": "#06080c",
-        "circle-stroke-width": 2,
+      layout: {
+        "icon-image": ["case", ["==", ["get", "heli"], true], ICONS.heliHover.id, ICONS.planeHover.id] as never,
+        "icon-rotate": ["-", ["get", "bearing"], 90] as never,
+        "icon-rotation-alignment": "map",
+        "icon-size": 1.15,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
       },
     }),
   },
@@ -290,6 +288,10 @@ function setProp(map: MLMap, st: SyncState, layer: string, kind: "paint" | "filt
   else map.setPaintProperty(layer, prop as never, value as never);
 }
 
+function flightColor(d: OverlayData) {
+  return ["case", ["==", ["get", "heli"], true], d.dark ? "#f0abfc" : "#c026d3", d.dark ? "#7aa7ff" : "#2563eb"];
+}
+
 function enfColor(d: OverlayData) {
   return ["match", ["to-string", ["get", "mains_hz"]], "50", "#60a5fa", "60", "#f472b6", "50/60", "#a78bfa", d.dark ? "#4b5563" : "#9ca3af"];
 }
@@ -302,6 +304,7 @@ function enfOpacity(d: OverlayData) {
 
 /** Make the map's overlay sources and layers match `d` (safe to call after a style swap). */
 export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
+  ensureIcons(map, d.dark);
   for (const k of SOURCES) {
     const id = sid(k);
     const data = (d[k] as FeatureCollection | null) ?? { type: "FeatureCollection", features: [] };
@@ -322,6 +325,19 @@ export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
       st.data.set(id, data);
     }
   }
+  for (const k of IMAGE_SOURCES) {
+    const id = sid(k);
+    const img = d[k];
+    const src = map.getSource(id) as { updateImage?: (o: { url: string; coordinates: HeatImage["coordinates"] }) => void } | undefined;
+    const next = img ?? { url: BLANK_PNG, coordinates: BLANK_COORDS };
+    if (!src) {
+      map.addSource(id, { type: "image", url: next.url, coordinates: next.coordinates });
+      st.data.set(id, img);
+    } else if (st.data.get(id) !== img) {
+      src.updateImage?.(next);
+      st.data.set(id, img);
+    }
+  }
   for (const l of LAYERS) {
     if (!map.getLayer(l.id)) {
       map.addLayer(l.spec(d));
@@ -339,13 +355,16 @@ export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
   // data-dependent styling
   setProp(map, st, "ts-flights-hl", "filter", "", ["in", ["get", "idx"], ["literal", d.flightHl]]);
   setProp(map, st, "ts-flights-sel", "filter", "", ["==", ["get", "idx"], d.flightSel ?? -1]);
-  setProp(map, st, "ts-flights", "paint", "line-color", d.dark ? "#7aa7ff" : "#2563eb");
+  setProp(map, st, "ts-flights", "paint", "line-color", flightColor(d));
   setProp(map, st, "ts-flights", "paint", "line-opacity", d.flightHl.length || d.flightSel != null ? 0.28 : 0.5);
-  setProp(map, st, "ts-aheat", "paint", "circle-radius", radiusExpr(d.aHeatR0, 3));
-  setProp(map, st, "ts-lheat", "paint", "circle-radius", radiusExpr(d.lHeatR0, 3));
   setProp(map, st, "ts-enf-fill", "paint", "fill-color", enfColor(d));
   setProp(map, st, "ts-enf-fill", "paint", "fill-opacity", enfOpacity(d));
   setProp(map, st, "ts-land-fill", "paint", "fill-color", d.dark ? "#151b24" : "#f8fafc");
   setProp(map, st, "ts-land-line", "paint", "line-color", d.dark ? "#2c3542" : "#cbd5e1");
   setProp(map, st, "ts-lmatch", "paint", "line-color", d.dark ? "#ffffff" : "#0f172a");
+  const cand = d.dark ? "#67e8f9" : "#0891b2";
+  setProp(map, st, "ts-flights-hl", "paint", "line-color", cand);
+  setProp(map, st, "ts-cand-links", "paint", "line-color", cand);
+  setProp(map, st, "ts-cand-cpa", "paint", "circle-color", cand);
+  setProp(map, st, "ts-cand-cpa", "paint", "circle-stroke-color", d.dark ? "#06080c" : "#ffffff");
 }

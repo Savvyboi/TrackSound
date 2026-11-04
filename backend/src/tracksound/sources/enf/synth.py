@@ -23,6 +23,8 @@ def random_walk_enf(n_s: int, nominal: float = 50.0, seed: int = 0, std_hz: floa
     sig = std_hz * np.sqrt(1.0 - a * a)
     for i in range(1, n_s):
         x[i] = a * x[i - 1] + sig * e[i]
+    # correlated innovations inflate the variance; rescale so the series has the requested spread
+    x = (x - x.mean()) * (std_hz / max(float(x.std()), 1e-12))
     return nominal + x
 
 

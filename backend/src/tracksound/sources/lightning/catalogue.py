@@ -15,6 +15,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .events import EARLY_EXTRA_DEFAULT_M, EARLY_EXTRA_M, MIN_SIGMA_M, SEISMIC_KINDS, canonical_kind
+
 DEFAULT_CSV_SIGMA_M = 500.0     # ground networks are 0.1-1 km; used when the CSV has no sigma column
 MAX_CSV_ROWS = 2_000_000
 
@@ -27,9 +29,13 @@ _ALIASES = {
     "lon": ["lon", "lng", "long", "longitude", "lon_deg", "longitude_deg", "x"],
     "sigma_m": ["sigma_m", "sigma", "error_m", "err_m", "accuracy_m", "accuracy", "uncertainty_m", "uncertainty",
                 "location_error_m", "loc_error_m", "error", "ellipse_m", "semi_major_m"],
-    "sigma_km": ["sigma_km", "error_km", "err_km", "accuracy_km", "uncertainty_km", "location_error_km"],
+    "sigma_km": ["sigma_km", "error_km", "err_km", "accuracy_km", "uncertainty_km", "location_error_km",
+                 "horizontalerror", "horizontal_error", "horizontal_error_km"],      # ComCat: km
     "energy": ["energy", "peak_current", "peakcurrent", "current", "peak_current_ka", "current_ka", "ka", "amplitude",
-               "flash_energy", "intensity", "polarity_current"],
+               "flash_energy", "intensity", "polarity_current", "mag", "magnitude"],
+    "depth_m": ["depth_m"],
+    "depth_km": ["depth_km", "depth"],                                                  # seismic catalogues: km
+    "ref": ["id", "event_id", "eventid", "ref"],
     "kind": ["kind", "type", "stroke_type", "flash_type", "class", "cloud", "cg_ic", "category"],
 }
 
@@ -54,7 +60,7 @@ def normalise_kind(value, flag_column: bool = False) -> str | None:
         return "cg"
     if s in _KIND_IC:
         return "ic"
-    return s[:24]
+    return (canonical_kind(s) or "")[:32] or None
 
 
 def _norm_header(h: str) -> str:
@@ -151,22 +157,35 @@ def parse_csv(data: bytes | str, default_sigma_m: float = DEFAULT_CSV_SIGMA_M, s
               else np.full(len(df), np.nan))
     kinds = df[c_kind].tolist() if c_kind is not None else [None] * len(df)
     flag_col = c_kind is not None and _norm_header(c_kind) in _FLAG_COLUMNS
+    c_dm, c_dkm, c_ref = _find_column(headers, "depth_m"), _find_column(headers, "depth_km"), _find_column(headers, "ref")
+    depth = (pd.to_numeric(df[c_dm], errors="coerce").to_numpy(dtype=np.float64) if c_dm is not None else
+             pd.to_numeric(df[c_dkm], errors="coerce").to_numpy(dtype=np.float64) * 1000.0 if c_dkm is not None else
+             np.full(len(df), np.nan))
+    refs = df[c_ref].astype(str).tolist() if c_ref is not None else [None] * len(df)
 
     ok = np.isfinite(times) & np.isfinite(lat) & np.isfinite(lon) & (np.abs(lat) <= 90) & (np.abs(lon) <= 360)
     if not ok.any():
         raise ValueError("no usable rows in the CSV (check the time, lat and lon columns)")
     lon = np.where(lon > 180, lon - 360, lon)
     strikes = [make_strike(times[i], lat[i], lon[i], sigma[i],
-                           energy[i] if np.isfinite(energy[i]) else None, normalise_kind(kinds[i], flag_col), source)
+                           energy[i] if np.isfinite(energy[i]) else None, normalise_kind(kinds[i], flag_col), source,
+                           depth_m=depth[i] if np.isfinite(depth[i]) else None, ref=refs[i])
                for i in np.flatnonzero(ok)]
     return assign_ids(strikes)
 
 
 def make_strike(t_utc: float, lat: float, lon: float, sigma_m: float, energy: float | None, kind: str | None,
-                source: str) -> dict:
-    return {"id": "", "t_utc": round(float(t_utc), 4), "lat": round(float(lat), 6), "lon": round(float(lon), 6),
-            "sigma_m": round(float(sigma_m), 1), "energy": None if energy is None else float(energy),
-            "kind": kind, "source": source}
+                source: str, depth_m: float | None = None, ref: str | None = None) -> dict:
+    """A Strike document. ``depth_m`` (source depth, used for earthquakes) and ``ref`` (the
+    catalogue's own event id) are only present when known."""
+    s = {"id": "", "t_utc": round(float(t_utc), 4), "lat": round(float(lat), 6), "lon": round(float(lon), 6),
+         "sigma_m": round(float(sigma_m), 1), "energy": None if energy is None else float(energy),
+         "kind": kind, "source": source}
+    if depth_m is not None:
+        s["depth_m"] = round(float(depth_m), 1)
+    if ref and ref.lower() not in ("nan", "none"):
+        s["ref"] = str(ref)[:64]
+    return s
 
 
 def assign_ids(strikes: list[dict]) -> list[dict]:
@@ -199,21 +218,19 @@ def strikes_bbox(strikes: list[dict]) -> dict | None:
 
 # ---- array view for the solver ----------------------------------------------------------------
 
-# extra "early arrival" allowance (m) by kind: thunder's first arrival comes from the nearest
-# part of the channel, which for in-cloud or long flashes (and GLM's energy-weighted flash
-# centroids) can be km closer than the catalogued point; for ground strike points it is small.
-EARLY_EXTRA_M = {"cg": 250.0, "ic": 1500.0, "flash": 1500.0}
-EARLY_EXTRA_DEFAULT_M = 800.0
-
-
 @dataclass
 class StrikeArrays:
+    """Strikes (or other events) as time-sorted arrays, with how each one's sound travels."""
     ids: list[str]
     t: np.ndarray          # unix s
     lat: np.ndarray
     lon: np.ndarray
     sigma_m: np.ndarray
     early_m: np.ndarray    # extra tolerance for early arrivals
+    seismic: np.ndarray    # bool: heard via the P wave through the ground (earthquakes)
+    depth_m: np.ndarray    # source depth (seismic events; 0 for air waves)
+    kinds: list[str | None]
+    sources: list[str]
 
     def __len__(self) -> int:
         return len(self.ids)
@@ -221,19 +238,29 @@ class StrikeArrays:
     def subset(self, idx) -> "StrikeArrays":
         idx = np.asarray(idx)
         return StrikeArrays([self.ids[i] for i in idx], self.t[idx], self.lat[idx], self.lon[idx],
-                            self.sigma_m[idx], self.early_m[idx])
+                            self.sigma_m[idx], self.early_m[idx], self.seismic[idx], self.depth_m[idx],
+                            [self.kinds[i] for i in idx], [self.sources[i] for i in idx])
 
 
 def to_arrays(strikes: list[dict]) -> StrikeArrays:
     order = sorted(range(len(strikes)), key=lambda i: strikes[i]["t_utc"])
     s = [strikes[i] for i in order]
+    kinds = [canonical_kind(x.get("kind")) for x in s]
+    seismic = np.array([k in SEISMIC_KINDS for k in kinds], dtype=bool)
+    sigma = [max(MIN_SIGMA_M.get(k or "", 1.0), float(x.get("sigma_m") or DEFAULT_CSV_SIGMA_M)) for x, k in zip(s, kinds)]
     return StrikeArrays(
         ids=[x["id"] for x in s],
         t=np.array([x["t_utc"] for x in s], dtype=np.float64),
         lat=np.array([x["lat"] for x in s], dtype=np.float64),
         lon=np.array([x["lon"] for x in s], dtype=np.float64),
-        sigma_m=np.array([max(1.0, float(x.get("sigma_m") or DEFAULT_CSV_SIGMA_M)) for x in s], dtype=np.float64),
-        early_m=np.array([EARLY_EXTRA_M.get(x.get("kind") or "", EARLY_EXTRA_DEFAULT_M) for x in s], dtype=np.float64),
+        sigma_m=np.array(sigma, dtype=np.float64),
+        early_m=np.array([0.0 if sm else EARLY_EXTRA_M.get(k or "", EARLY_EXTRA_DEFAULT_M)
+                          for k, sm in zip(kinds, seismic)], dtype=np.float64),
+        seismic=seismic,
+        depth_m=np.array([max(0.0, float(x.get("depth_m") or 0.0)) if sm else 0.0 for x, sm in zip(s, seismic)],
+                         dtype=np.float64),
+        kinds=kinds,
+        sources=[str(x.get("source") or "") for x in s],
     )
 
 

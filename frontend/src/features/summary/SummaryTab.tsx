@@ -1,7 +1,8 @@
-import { Activity, ArrowLeftRight, Clock3, Download, LocateFixed, Plane, ShieldAlert, Zap } from "lucide-react";
+import { Activity, ArrowLeftRight, Clock3, Download, LocateFixed, Plane, RadioTower, ShieldAlert, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { api, errorMessage } from "../../api/client";
-import { useEnf, useEnfMatch, useEnfReferences, useLightning, usePatchCase, useSearches, useSolve } from "../../api/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAlerts, useEnf, useEnfMatch, useEnfReferences, useLightning, useSearches, useSolve } from "../../api/queries";
 import type { StartSource } from "../../api/types";
 import { SourceBadge } from "../../components/SourceBadge";
 import { Button, IconButton } from "../../components/ui/Button";
@@ -12,6 +13,7 @@ import { fmtDist, fmtDuration, fmtLatLonPretty, fmtPct, fmtSigned } from "../../
 import { circleRing, haversine } from "../../lib/geo";
 import { fmtDateTime, fmtUtc } from "../../lib/tz";
 import { focusMap, setTab, ws } from "../../state/workspace";
+import { adoptStartTime } from "../workspace/adoptStart";
 import { caseTz, useCaseData } from "../workspace/caseContext";
 
 type Estimate = {
@@ -33,7 +35,8 @@ export function SummaryTab() {
   const lightning = useLightning(c.id);
   const enf = useEnf(c.id);
   const refs = useEnfReferences();
-  const patch = usePatchCase(c.id);
+  const alerts = useAlerts(c.id);
+  const qc = useQueryClient();
 
   const okSearches = (searches.data ?? []).filter((s) => s.status === "done" && s.best);
   const aSearch = okSearches.find((s) => s.mode === "refine") ?? okSearches[0];
@@ -107,6 +110,35 @@ export function SummaryTab() {
     });
   }
 
+  const header = (alerts.data?.headers ?? []).slice().sort((a, b) => b.confidence - a.confidence)[0];
+  if (header) {
+    const pts = header.locations.filter((l) => l.lat != null && l.lon != null);
+    const lat = pts.length ? pts.reduce((a, l) => a + l.lat!, 0) / pts.length : null;
+    const lon = pts.length ? pts.reduce((a, l) => a + l.lon!, 0) / pts.length : null;
+    const names = header.locations
+      .slice(0, 3)
+      .map((l) => [l.county ?? l.fips, l.state].filter(Boolean).join(", "))
+      .join("; ");
+    ests.push({
+      source: "alerts",
+      label: "Emergency alert",
+      icon: <RadioTower />,
+      color: "var(--src-alerts)",
+      loc: lat != null && lon != null ? { lat, lon, radius_m: 30000 } : null,
+      where: names ? `County level: ${names}` : undefined,
+      start_utc: header.implied_start_utc,
+      quality: (
+        <>
+          {header.event_name} · {header.repeats}/3 bursts · confidence {Math.round(header.confidence * 100)}%
+        </>
+      ),
+      open: () => {
+        setTab("alerts");
+        ws.set({ alertId: header.id });
+      },
+    });
+  }
+
   const zoomTo = (e: Estimate) => {
     if (!e.loc) return;
     const r = Math.max(400, (e.loc.radius_m ?? 600) * 1.8);
@@ -159,7 +191,7 @@ export function SummaryTab() {
                 </div>
                 <div className="mt-2">
                   <KV label="Location">
-                    {e.loc ? (
+                    {e.loc && e.source !== "alerts" ? (
                       <>
                         {fmtLatLonPretty(e.loc.lat, e.loc.lon, 4)}
                         {e.loc.radius_m != null && <span className="text-fg-muted"> ± {fmtDist(e.loc.radius_m)}</span>}
@@ -177,9 +209,8 @@ export function SummaryTab() {
                   <button
                     className="mt-1.5 text-2xs font-medium text-accent hover:underline"
                     onClick={() =>
-                      patch.mutate(
-                        { start_utc: e.start_utc, start_utc_source: e.source },
-                        { onError: (err) => toast({ tone: "error", title: "Could not set the start time", body: errorMessage(err) }) },
+                      adoptStartTime(qc, c.id, e.start_utc!, e.source).catch((err) =>
+                        toast({ tone: "error", title: "Could not set the start time", body: errorMessage(err) }),
                       )
                     }
                   >

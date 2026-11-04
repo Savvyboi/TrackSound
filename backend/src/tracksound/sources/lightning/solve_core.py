@@ -30,9 +30,10 @@ from typing import Callable, Iterator
 import numpy as np
 
 from .catalogue import StrikeArrays
+from .events import ACOUSTIC_REL, SEISMIC_REL, VP_M_S
 from .geo import LocalFrame
 
-SIGMA_REL = 0.01          # relative travel-time error (sound speed, wind)
+SIGMA_REL = ACOUSTIC_REL  # relative travel-time error through the air (sound speed, wind)
 SIGMA_FLOOR_S = 0.05
 MATCH_U = 2.0             # |u| <= 2 counts as a match
 MATCH_K = math.exp(-0.5 * MATCH_U ** 2)
@@ -66,18 +67,33 @@ class Problem:
         self.st = strikes.t
         self.sy, self.su = frame.to_yu(strikes.lat, strikes.lon)
         self.c = float(c)
-        self.sp = strikes.sigma_m / self.c
-        self.se = strikes.early_m / self.c
+        # how each event's sound travels: air waves at c; earthquakes via the P wave from the hypocentre
+        self.acoustic = ~strikes.seismic
+        self.any_seismic = bool(strikes.seismic.any())
+        self.v = np.where(strikes.seismic, VP_M_S, self.c)
+        self.z2 = strikes.depth_m ** 2
+        self.rel = np.where(strikes.seismic, SEISMIC_REL, ACOUSTIC_REL)
+        self.sp = strikes.sigma_m / self.v
+        self.se = strikes.early_m / self.v
         self.D = float(duration_s)
         self.frame = frame
         self.R = float(max_range_m)
         self.taper_w = max(300.0, 0.03 * self.R)
         self.R_eff = self.R + 4.0 * self.taper_w
+        self.tt_max = max(self.R_eff / self.c, float(np.max(np.sqrt(self.R_eff ** 2 + self.z2) / self.v))
+                          if len(self.v) else 0.0)
         self.miss_weight = float(miss_weight)
+        self.on_block: Callable[[], None] | None = None     # called per block (job cancellation)
 
     @property
     def K(self) -> int:
         return len(self.a)
+
+    def _tt(self, d, j):
+        """Travel time (s) over horizontal distance d to events j (j runs along d's last axis)."""
+        if not self.any_seismic:
+            return d / self.c
+        return np.sqrt(d * d + self.z2[j]) / self.v[j]
 
     def taper(self, d: np.ndarray) -> np.ndarray:
         z = np.clip((d - self.R) / self.taper_w, -50.0, 50.0)
@@ -119,12 +135,12 @@ class Problem:
         sp = float(self.sp.max()) if len(self.sp) else 0.0
         se = float(self.se.max()) if len(self.se) else 0.0
         sk = float(self.sk.max()) if self.K else 0.0
-        return math.sqrt(sk ** 2 + sp ** 2 + (SIGMA_REL * self.R_eff / self.c) ** 2 + sig_grid ** 2
-                         + SIGMA_FLOOR_S ** 2 + se ** 2)
+        rel = float(np.max(self.rel)) if len(self.rel) else SIGMA_REL
+        return math.sqrt(sk ** 2 + sp ** 2 + (rel * self.tt_max) ** 2 + sig_grid ** 2 + SIGMA_FLOOR_S ** 2 + se ** 2)
 
     def _block_pairs(self, y, u, T_lo, T_hi, smax):
-        j_idx = self.strikes_near(y, u, self.R_eff, T_lo - smax - 1.0, T_hi + smax + self.R_eff / self.c + self.D + 1.0)
-        return self.pairs(j_idx, T_lo - smax - self.R_eff / self.c, T_hi + smax)
+        j_idx = self.strikes_near(y, u, self.R_eff, T_lo - smax - self.tt_max - 1.0, T_hi + smax + self.D + 1.0)
+        return self.pairs(j_idx, T_lo - smax - self.tt_max, T_hi + smax)
 
     def _blocks(self, idx: np.ndarray, gy, gu, pair_fn: Callable, per_point_extra: int = 0
                 ) -> Iterator[tuple[np.ndarray, np.ndarray, np.ndarray]]:
@@ -140,6 +156,8 @@ class Problem:
             if e - s > 1 and cost * (e - s) > MAX_ELEMS:
                 per = max(1, MAX_ELEMS // cost)
                 continue
+            if self.on_block is not None:
+                self.on_block()
             yield sel, pk, pj
             s = e
             per = max(1, min(4096, int(1.5 * MAX_ELEMS // cost)))
@@ -151,8 +169,8 @@ class Problem:
         return d[:, inv]
 
     def _sigmas(self, d, pk, pj, sig_grid):
-        tt = d / self.c
-        base = (self.sk[pk] ** 2 + self.sp[pj] ** 2 + sig_grid ** 2 + SIGMA_FLOOR_S ** 2)[None, :] + (SIGMA_REL * tt) ** 2
+        tt = self._tt(d, pj)
+        base = (self.sk[pk] ** 2 + self.sp[pj] ** 2 + sig_grid ** 2 + SIGMA_FLOOR_S ** 2)[None, :] + (self.rel[pj] * tt) ** 2
         return np.sqrt(base), np.sqrt(base + (self.se[pj] ** 2)[None, :])
 
     def _kernel(self, d, r, pk, pj, sig_grid):
@@ -185,7 +203,7 @@ class Problem:
                 continue
             y, u = gy[sel], gu[sel]
             d = self._dist(y, u, pj)
-            T_imp = self.st[pj][None, :] + d / self.c - self.a[pk][None, :]
+            T_imp = self.st[pj][None, :] + self._tt(d, pj) - self.a[pk][None, :]
             s_late, s_early = self._sigmas(d, pk, pj, sig_grid)
             w = self.taper(d)
             b0 = np.floor((T_imp - s_early - T_lo) / bin_w).astype(np.int64)
@@ -234,7 +252,7 @@ class Problem:
                 y, u, Tc = gy[sel], gu[sel], T[sel]
                 if len(pk) and self.K:
                     d = self._dist(y, u, pj)
-                    r = self.a[pk][None, :] + Tc[:, None] - self.st[pj][None, :] - d / self.c
+                    r = self.a[pk][None, :] + Tc[:, None] - self.st[pj][None, :] - self._tt(d, pj)
                     Km, sig = self._kernel(d, r, pk, pj, sig_grid)
                     ks = np.flatnonzero(np.r_[True, pk[1:] != pk[:-1]])
                     max_k = np.maximum.reduceat(Km, ks, axis=1)
@@ -261,7 +279,7 @@ class Problem:
         T_lo, T_hi = float(np.min(T)), float(np.max(T))
         j = self.strikes_near(gy, gu, MISS_ZERO_M, T_lo + EDGE_MARGIN_S - MISS_ZERO_M / self.c - 1.0,
                               T_hi + self.D - EDGE_MARGIN_S + 1.0)
-        j = j[self.strikes.sigma_m[j] < MISS_ZERO_M - MISS_FULL_M] if len(j) else j
+        j = j[(self.strikes.sigma_m[j] < MISS_ZERO_M - MISS_FULL_M) & self.acoustic[j]] if len(j) else j
         if len(j) == 0:
             return out
         d = self.frame.dist(gy[:, None], gu[:, None], self.sy[j][None, :], self.su[j][None, :])
@@ -287,7 +305,7 @@ class Problem:
         j = self.strikes_near(gy, gu, MISS_ZERO_M, T + EDGE_MARGIN_S - MISS_ZERO_M / self.c - 1.0,
                               T + self.D - EDGE_MARGIN_S + 1.0)
         out = []
-        for jj in j:
+        for jj in j[self.acoustic[j]] if len(j) else j:
             d = float(self.frame.dist(y, u, self.sy[jj], self.su[jj]))
             if d + self.strikes.sigma_m[jj] > 0.5 * (MISS_FULL_M + MISS_ZERO_M):
                 continue
@@ -309,7 +327,7 @@ class Problem:
         if len(pk) == 0:
             return []
         d = self._dist(gy, gu, pj)
-        r = self.a[pk][None, :] + T - self.st[pj][None, :] - d / self.c
+        r = self.a[pk][None, :] + T - self.st[pj][None, :] - self._tt(d, pj)
         Kv, sig = self._kernel(d, r, pk, pj, 0.0)
         Kv, sig, d, r = Kv[0], sig[0], d[0], r[0]
         used_k, used_j, out = set(), set(), []
@@ -335,7 +353,7 @@ class Problem:
         gy, gu = np.array([y]), np.array([u])
         pk, pj = self._block_pairs(gy, gu, T, T, smax)
         d = self._dist(gy, gu, pj)
-        r = self.a[pk][None, :] + T - self.st[pj][None, :] - d / self.c
+        r = self.a[pk][None, :] + T - self.st[pj][None, :] - self._tt(d, pj)
         Kv = self._kernel(d, r, pk, pj, 0.0)[0][0]
         return np.array([float(Kv[(pk == m["k"]) & (pj != m["j"])].sum()) for m in matches])
 
@@ -356,8 +374,9 @@ class Problem:
 
         def resid(q):
             d = self.frame.dist(q[0], q[1], self.sy[j], self.su[j])
-            r = self.a[k] + q[2] - self.st[j] - d / self.c
-            base = self.sk[k] ** 2 + self.sp[j] ** 2 + SIGMA_FLOOR_S ** 2 + (SIGMA_REL * d / self.c) ** 2
+            tt = self._tt(d, j)
+            r = self.a[k] + q[2] - self.st[j] - tt
+            base = self.sk[k] ** 2 + self.sp[j] ** 2 + SIGMA_FLOOR_S ** 2 + (self.rel[j] * tt) ** 2
             z = r / np.where(r >= 0, np.sqrt(base), np.sqrt(base + self.se[j] ** 2))
             if T_prior is not None:
                 z = np.append(z, (q[2] - T_prior[0]) / T_prior[1])

@@ -43,7 +43,7 @@ type Case = {
   timezone: string | null;       // IANA name, for display, e.g. "America/New_York"
   region: BBox | null;           // search region
   start_utc: number | null;      // recording start time (unix s) if known or estimated
-  start_utc_source: "user" | "aircraft" | "lightning" | "enf" | null;
+  start_utc_source: "user" | "aircraft" | "lightning" | "enf" | "alerts" | null;
   temperature_c: number | null;  // air temperature; null means 15 °C
   recording: Recording | null;
 };
@@ -107,7 +107,7 @@ type Job = {
 | PATCH | `/api/cases/{id}` | any of `name, notes, date, timezone, region, start_utc, start_utc_source, temperature_c` | `Case` |
 | DELETE | `/api/cases/{id}` | | 204 |
 | POST | `/api/cases/{id}/recording` | multipart form, field `file` | `{ case: Case, job: Job }`; the job decodes the file and builds the spectrogram |
-| GET | `/api/cases/{id}/spectrogram/tile?level=z&index=i` | | binary tile (below) |
+| GET | `/api/cases/{id}/spectrogram/tile?level=z&index=i` | | binary tile (below); tiles are cached for an hour, so the UI adds `&v=<recording.uploaded_at>` (ignored by the server) to bust the cache after a re-upload |
 | GET | `/api/cases/{id}/audio?t0=&t1=&speed=1` | at most 600 s | `audio/wav` |
 | GET | `/api/cases/{id}/report` | | JSON with the case, every source's state and best results (for export) |
 | GET | `/api/cases/{id}/weather` | needs `date` and `region` | `{ source, lat, lon, date, hourly: { t_utc, temperature_c }[], suggested_c, basis, sound_speed_mps, attribution }` from the Open-Meteo archive. The UI offers "use suggested_c" and PATCHes `temperature_c`. 502 if unavailable |
@@ -176,6 +176,7 @@ type FlightSet = {
   date: string | null; bbox: BBox | null; fetched_at: number | null;
   n_flights: number;
   flights: FlightSummary[];
+  attribution?: string;          // present when ready: show it wherever flights are drawn (ODbL)
 };
 
 type AircraftSearchRequest = {
@@ -220,6 +221,7 @@ type AircraftSearch = {
   margin: number | null;         // (best - best other flight pair) / best; null if no runner-up
   candidates: AircraftCandidate[];// blind/point/single: best point per flight pair (or flight), ranked. refine: top fine-grid points
   heat: { lat: number; lon: number; score: number }[];   // best score per grid point, at most 20 000 points
+  notes: string[];               // plain-language caveats (e.g. the silence filter was switched off); show them
 };
 ```
 
@@ -232,7 +234,7 @@ type AircraftSearch = {
 | DELETE | `/api/cases/{id}/aircraft/events/{eid}` | | 204 |
 | GET | `/api/cases/{id}/aircraft/flights` | | `FlightSet` |
 | POST | `/api/cases/{id}/aircraft/flights/fetch` | `{ date?, bbox?, keep_jets?: false }` | `Job`; result `{ n_flights }`. Defaults to `case.date` and `case.region` padded by 15 km. Streams one UTC day of adsb.lol history (about 4 GB; minutes), cached per day and region |
-| GET | `/api/cases/{id}/aircraft/flights/geojson?t0_utc=&t1_utc=` | | GeoJSON `FeatureCollection` of `LineString`s, coordinates `[lon, lat, alt_m]`, properties `{ idx, icao, reg, type, desc, t_start_utc, t_end_utc, times: number[] }` (unix s per vertex, thinned to about one per 10 s) |
+| GET | `/api/cases/{id}/aircraft/flights/geojson?t0_utc=&t1_utc=` | | GeoJSON `FeatureCollection` of `LineString`s, coordinates `[lon, lat, alt_m]`, properties `{ idx, icao, reg, type, desc, category, t_start_utc, t_end_utc, times: number[] }` (unix s per vertex, thinned to about one per 10 s) |
 | GET | `/api/cases/{id}/aircraft/flights/{idx}` | | `{ idx, icao, reg, type, t: number[], lat: number[], lon: number[], alt_m: number[] }` full track |
 | POST | `/api/cases/{id}/aircraft/search/estimate` | `AircraftSearchRequest` | `{ n_points, n_segments, est_seconds }` |
 | POST | `/api/cases/{id}/aircraft/search` | `AircraftSearchRequest` | `Job`; result `{ search_id }` |

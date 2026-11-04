@@ -198,6 +198,7 @@ function RefRow({ r }: { r: EnfReference }) {
         <span className="text-fg-faint">·</span>
         <span>{cov ? (cov.length ? `${fmtUtc(cov[0].t0_utc, false)} → ${fmtUtc(cov[cov.length - 1].t1_utc, false)}` : "no data") : "fetched on demand"}</span>
       </div>
+      {r.available && <div className="mt-1 text-2xs leading-snug text-fg-faint">{r.available}</div>}
       {(r.licence || r.url) && (
         <div className="mt-1 flex items-center gap-2 text-[10px] text-fg-faint">
           {r.licence && <span>{r.licence}</span>}
@@ -449,7 +450,8 @@ function MatchDetail({ id }: { id: string }) {
   if (!m) return null;
   const b = m.best;
   const same = b && c.start_utc != null && Math.abs(c.start_utc - b.start_utc) < 0.5 && c.start_utc_source === "enf";
-  const strong = b && b.z >= 5;
+  // the best clearly different start time (more than a minute away) shows how distinct the peak is
+  const runnerUp = b ? m.top.filter((t) => Math.abs(t.start_utc - b.start_utc) > 60).sort((x, y) => y.corr - x.corr)[0] : undefined;
   return (
     <div className="rounded-lg border border-line bg-surface p-2.5 animate-fade-in">
       {b ? (
@@ -459,7 +461,7 @@ function MatchDetail({ id }: { id: string }) {
           <div className="text-2xs text-fg-muted tnum">{fmtUtc(b.start_utc)}</div>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Stat label="Correlation" value={b.corr.toFixed(3)} />
-            <Stat label="Z-score" value={b.z.toFixed(1)} sub={strong ? "clear peak" : "weak peak: treat with care"} />
+            <Stat label="Z-score" value={b.z.toFixed(1)} sub={runnerUp ? `next peak r ${runnerUp.corr.toFixed(3)}` : undefined} />
           </div>
           {m.top.length > 1 && (
             <div className="mt-2">

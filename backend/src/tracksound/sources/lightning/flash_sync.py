@@ -12,6 +12,7 @@ import math
 
 import numpy as np
 
+from ...physics import pad_bbox
 from .catalogue import StrikeArrays
 from .geo import LocalFrame, frame_for_bbox, in_bbox
 
@@ -84,13 +85,13 @@ def sync_candidates(flash_t: np.ndarray, sa: StrikeArrays, tol: float, region: d
         out = out[:min(max_cands, 6)]
         b = out[0]
         note = (f"Clock from video flashes: {b['count']} of {len(flash_t)} accepted flashes coincide with catalogued "
-                f"strikes (spread {b['rms'] * 1000:.0f} ms).")
+                f"events (spread {b['rms'] * 1000:.0f} ms).")
         if len(out) > 1 and out[1]["count"] == b["count"]:
-            note += f" {len(out)} different clock offsets fit equally well; the thunder decides between them."
+            note += f" {len(out)} different clock offsets fit equally well; the sound decides between them."
         return out, {"note": note, "best_count": best_count}
-    # a single usable flash: every nearby strike could be its source
+    # a single usable flash: every event within range of the region could be its source
     fr = frame_for_bbox(region)
-    near = np.flatnonzero(in_bbox(sa.lat, sa.lon, region))
+    near = np.flatnonzero(in_bbox(sa.lat, sa.lon, pad_bbox(region, max_range_m)))
     if len(near) == 0:
         return [], {"note": "", "best_count": best_count}
     y, u = fr.to_yu(sa.lat[near], sa.lon[near])
@@ -105,8 +106,9 @@ def sync_candidates(flash_t: np.ndarray, sa: StrikeArrays, tol: float, region: d
                 break
         if len(out) >= max_cands:
             break
-    note = (f"Only one flash can be matched at a time, so {len(out)} catalogued strikes in the region were tried as "
-            "its source; the thunder decides between them.")
+    note = ("Only one flash can be matched at a time, so " +
+            (f"{len(out)} catalogued events near the region were tried as its source; the sound decides between them."
+             if len(out) != 1 else "the clock comes from the one catalogued event near the region."))
     return out, {"note": note, "best_count": best_count}
 
 

@@ -22,10 +22,11 @@ from typing import Callable
 
 import numpy as np
 
+from ...physics import pad_bbox
 from .catalogue import StrikeArrays, describe_sigma, to_arrays
 from .geo import bbox_size_m, frame_for_bbox, grid_points, in_bbox, square_bbox
+from .flash_sync import flash_matches, sync_candidates
 from .solve_core import MISS_WEIGHT, MISS_WEIGHT_MANUAL, Problem
-from .flash_sync import sync_candidates, flash_matches
 
 ProgressFn = Callable[[float, str | None], None]
 
@@ -72,7 +73,7 @@ class _Search:
         self.p, self.region, self.spacing, self.mode, self.progress = prob, region, spacing_m, mode, progress
         ew, ns = bbox_size_m(region)
         self.spacing_c = max(spacing_m, math.sqrt(max(ew * ns, 1.0) / COARSE_POINTS[mode]))
-        self.heat: list[tuple[np.ndarray, np.ndarray, np.ndarray]] = []
+        self.heat: list[tuple[np.ndarray, np.ndarray, np.ndarray, float]] = []   # (y, u, score, cell size m)
 
     def sig_grid(self, spacing: float) -> float:
         return 0.5 * spacing / self.p.c
@@ -83,12 +84,15 @@ class _Search:
         return float(np.clip(0.5 * typ, 0.05, 2.0)) if width > 0.4 * typ else max(0.02, width / 4)
 
     def scan(self, gy, gu, intervals: list[tuple[float, float]], spacing: float, n_peaks: int,
-             bonus: list[float] | None = None) -> dict:
-        """Best (score, T, n_matched, interval index) per point over the clock intervals."""
+             bonus: list[float] | None = None, progress: tuple[float, float] | None = None) -> dict:
+        """Best (score, T, n_matched, interval index) per point over the clock intervals.
+
+        ``progress`` maps this scan onto a (start, end) fraction of the job's progress."""
         n = len(gy)
         best = {"score": np.full(n, -np.inf), "T": np.full(n, np.nan), "n": np.zeros(n, np.int64),
                 "iv": np.full(n, -1)}
         sg = self.sig_grid(spacing)
+        steps, done = len(intervals) * n_peaks * 2, 0
         for ii, (lo, hi) in enumerate(intervals):
             bw = self.bin_w(sg, hi - lo)
             Tv, _ = self.p.vote_clock(gy, gu, lo, hi, sg, bw, n_peaks)
@@ -96,6 +100,10 @@ class _Search:
             for c in range(Tv.shape[1]):
                 T = Tv[:, c]
                 for _ in range(2):             # score, then one mean-shift step on the clock
+                    if progress:
+                        self.progress(progress[0] + (progress[1] - progress[0]) * done / steps,
+                                      f"Searching {len(gy)} grid points ({self.mode.replace('_', ' ')})")
+                    done += 1
                     ps = self.p.evaluate(gy, gu, T, sg)
                     s = ps.score + extra
                     upd = np.isfinite(T) & (s > best["score"])
@@ -107,8 +115,8 @@ class _Search:
     def coarse(self, intervals, n_peaks: int, bonus=None):
         frame = self.p.frame
         gy, gu, _, _ = grid_points(self.region, self.spacing_c, frame)
-        res = self.scan(gy, gu, intervals, self.spacing_c, n_peaks, bonus)
-        self.heat.append((gy, gu, res["score"]))
+        res = self.scan(gy, gu, intervals, self.spacing_c, n_peaks, bonus, progress=(0.05, 0.4))
+        self.heat.append((gy, gu, res["score"], self.spacing_c))
         return gy, gu, res
 
     def peaks(self, gy, gu, res, max_n: int, sep_m: float, sep_T: float) -> list[dict]:
@@ -137,7 +145,7 @@ class _Search:
         if hi <= lo:
             lo, hi = interval
         res = self.scan(gy, gu, [(lo, hi)], spacing, 1, [bonus])
-        self.heat.append((gy, gu, res["score"]))
+        self.heat.append((gy, gu, res["score"], spacing))
         i = int(np.argmax(res["score"]))
         return {"y": float(gy[i]), "u": float(gu[i]), "T": float(res["T"][i]), "score": float(res["score"][i]),
                 "n": int(res["n"][i]), "spacing": spacing, "gy": gy, "gu": gu, "res": res, "interval": (lo, hi),
@@ -164,20 +172,30 @@ class _Search:
         s = float(ps.score[0]) + r.get("bonus", 0.0)
         if cov is not None and s >= s0 - max(POLISH_DROP_ABS, POLISH_DROP_REL * abs(s0)):
             return {**r, "y": y, "u": u, "T": T, "score": s, "n": int(ps.n_matched[0]), "cov": cov}
+        if cov is None and T_prior is not None:
+            # too few matches to determine the clock: it comes from the prior (flash or given start)
+            T_p = float(np.clip(T_prior[0], *interval))
+            pp = self.p.evaluate(np.array([r["y"]]), np.array([r["u"]]), np.array([T_p]), 0.0)
+            sp = float(pp.score[0]) + r.get("bonus", 0.0)
+            if sp >= s0 - 0.25:
+                return {**r, "T": T_p, "score": sp, "n": int(pp.n_matched[0]), "cov": None}
         return {**r, "T": T_grid, "score": s0, "n": int(ps0.n_matched[0]), "cov": None}
 
     def heat_points(self) -> list[dict]:
+        """Grid scores for the map: the coarse grid over the region plus the finer windows around
+        the peaks, each point with its cell size ``cell_m`` (finer cells drawn over coarser)."""
         if not self.heat:
             return []
         y = np.concatenate([h[0] for h in self.heat])
         u = np.concatenate([h[1] for h in self.heat])
         s = np.concatenate([h[2] for h in self.heat])
+        cell = np.concatenate([np.full(len(h[0]), h[3]) for h in self.heat])
         keep = np.flatnonzero(s > 0.05)
         if len(keep) > HEAT_MAX:
             keep = keep[np.argsort(-s[keep], kind="stable")[:HEAT_MAX]]
         lat, lon = self.p.frame.to_latlon(y[keep], u[keep])
-        return [{"lat": round(float(a), 5), "lon": round(float(b), 5), "score": round(float(c), 3)}
-                for a, b, c in zip(lat, lon, s[keep])]
+        return [{"lat": round(float(a), 5), "lon": round(float(b), 5), "score": round(float(c), 3),
+                 "cell_m": round(float(m), 1)} for a, b, c, m in zip(lat, lon, s[keep], cell[keep])]
 
 
 def _uncertainty(r: dict, spacing: float, frame, mean_alt: float = 0.0) -> float:
@@ -209,9 +227,10 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     if note:
         notes.append(note)
     if not used:
-        raise ValueError("no thunder onsets to match: run 'detect thunder' or add onsets by hand")
+        raise ValueError("no onsets (thunder or other bangs) to match: run 'detect thunder' or add onsets by hand")
     if not strikes:
-        raise ValueError("no strikes: fetch GLM flashes or import a strike catalogue first")
+        raise ValueError("no events to match: fetch GLM lightning or USGS events, import a catalogue, "
+                         "or add a known event first")
     acc_flashes = [f for f in flashes if f.get("status") == "accepted"] if use_flashes else []
     mode = choose_mode(start_utc, len(acc_flashes), use_flashes)
     sa = to_arrays(strikes)
@@ -223,6 +242,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     manual_only = all(o.get("origin") == "manual" for o in used)
     prob = Problem([o["t"] for o in used], [o.get("sigma_s") or 0.3 for o in used], [o["id"] for o in used],
                    sa, c, duration_s, frame, R, MISS_WEIGHT_MANUAL if manual_only else MISS_WEIGHT)
+    prob.on_block = _throttled(lambda: report(None, None))    # lets a job be cancelled mid-pass
     search = _Search(prob, region, spacing_m, mode, report)
 
     # ---- clock intervals for the mode ----
@@ -232,7 +252,8 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     sync_sigma: list[float] = []
     if mode == "known_start":
         tol = max(0.0, float(start_tol_s))
-        intervals = [(start_utc - tol, start_utc + tol)]
+        half = max(tol, 0.01)
+        intervals = [(start_utc - half, start_utc + half)]
         T_prior = (start_utc, max(tol, 0.5))
         notes.append(f"Recording start taken as {_iso(start_utc)} (searched +-{tol:g} s).")
     elif mode == "flash_sync":
@@ -240,7 +261,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
                                            MAX_SYNC_CANDIDATES, date)
         if not cands:
             mode = "free"
-            notes.append("No accepted flash coincides with a catalogued strike, so the clock was searched freely.")
+            notes.append("No accepted flash coincides with a catalogued event, so the clock was searched freely.")
         else:
             intervals = [(x["T"] - 2 * x["sigma"], x["T"] + 2 * x["sigma"]) for x in cands]
             bonus = [FLASH_WEIGHT * x["count"] for x in cands]
@@ -248,12 +269,12 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
             notes.append(sync_info["note"])
             search = _Search(prob, region, spacing_m, "flash_sync", report)
     if mode == "free":
-        lo, hi = float(sa.t.min()) - duration_s - 10.0, float(sa.t.max()) + prob.R_eff / c + 10.0
+        lo, hi = float(sa.t.min()) - duration_s - 10.0, float(sa.t.max()) + prob.tt_max + 10.0
         if date:
             d0 = dt.datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc).timestamp()
             lo, hi = max(lo, d0 - duration_s - 3600.0), min(hi, d0 + 86400.0 + 3600.0)
         if hi <= lo:
-            raise ValueError("no strikes on the case date: check the date or the catalogue")
+            raise ValueError("no catalogued events on the case date: check the date or the catalogue")
         intervals = [(lo, hi)]
         search = _Search(prob, region, spacing_m, "free", report)
         notes.append("The recording clock was searched together with the position (no start time or accepted "
@@ -281,7 +302,19 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     refined.sort(key=lambda r: -r["score"])
     best = refined[0]
     report(0.95, "Collecting results")
-    return _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, spacing_m, region, sync_info)
+    return _result(mode, best, refined, search, prob, acc_flashes, notes, sa, region)
+
+
+def _throttled(fn: Callable[[], None], every_s: float = 0.25) -> Callable[[], None]:
+    import time
+    last = [0.0]
+
+    def call() -> None:
+        now = time.monotonic()
+        if now - last[0] >= every_s:
+            last[0] = now
+            fn()
+    return call
 
 
 def _region_from_strikes(sa: StrikeArrays, start_utc, duration_s, R) -> dict:
@@ -290,8 +323,9 @@ def _region_from_strikes(sa: StrikeArrays, start_utc, duration_s, R) -> dict:
         sel = (sa.t >= start_utc - R / 300.0 - 60) & (sa.t <= start_utc + duration_s + 60)
         if not sel.any():
             sel = np.ones(len(sa), bool)
-    return {"lat_min": float(sa.lat[sel].min()), "lat_max": float(sa.lat[sel].max()) + 1e-4,
-            "lon_min": float(sa.lon[sel].min()), "lon_max": float(sa.lon[sel].max()) + 1e-4}
+    box = {"lat_min": float(sa.lat[sel].min()), "lat_max": float(sa.lat[sel].max()) + 1e-4,
+           "lon_min": float(sa.lon[sel].min()), "lon_max": float(sa.lon[sel].max()) + 1e-4}
+    return pad_bbox(box, 0.5 * R)
 
 
 def _latlon(prob: Problem, y: float, u: float) -> tuple[float, float]:
@@ -306,16 +340,16 @@ def _empty_result(mode, notes, search, prob) -> dict:
             "flash_matches": [], "ranges": [], "notes": notes}
 
 
-def _ambiguity_radius(search: _Search, best: dict) -> float:
-    """How far from the best point the coarse grid still scores within 1 of the coarse best."""
-    gy, gu, sc = search.heat[0]
-    near = sc >= float(sc.max()) - 1.0
+def _ambiguity_radius(search: _Search, best: dict, drop: float = 1.0) -> float:
+    """How far from the best point the coarse grid still scores within ``drop`` of the coarse best."""
+    gy, gu, sc, _ = search.heat[0]
+    near = sc >= float(sc.max()) - drop
     if not near.any():
         return 0.0
     return float(np.max(search.p.frame.dist(gy[near], gu[near], best["y"], best["u"])))
 
 
-def _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, spacing_m, region, sync_info) -> dict:
+def _result(mode, best, refined, search, prob, acc_flashes, notes, sa, region) -> dict:
     frame = prob.frame
     m = prob.matches_at(best["y"], best["u"], best["T"])
     alt = prob.alternatives(best["y"], best["u"], best["T"], m)
@@ -324,18 +358,21 @@ def _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, sp
     if mean_alt >= AMBIGUOUS_ALTERNATIVES:
         unc = max(unc, _ambiguity_radius(search, best))
         notes.append(f"The matches are not distinctive: each onset also fits about {mean_alt:.0f} other catalogued "
-                     f"strike{'s' if round(mean_alt) != 1 else ''} (the storm is too active for the catalogue's "
-                     f"{describe_sigma(sa.sigma_m)} accuracy), so the position is ambiguous over a wide area. "
-                     "A known start time, video flashes or a more accurate catalogue would help.")
+                     f"event{'s' if round(mean_alt) != 1 else ''} (the catalogue is too dense for its "
+                     f"{describe_sigma(sa.sigma_m)} accuracy, as in an active storm), so the position is ambiguous "
+                     "over a wide area. A known start time, video flashes or a more accurate catalogue would help.")
+    if best.get("cov") is None and len(m) <= 2:
+        # one or two ranges do not fix a point: the fit is a ring (or two crossings) around the events
+        unc = max(unc, _ambiguity_radius(search, best, drop=0.5))
     ew, ns = bbox_size_m(region)
     unc = min(unc, 0.5 * math.hypot(ew, ns))          # beyond this it just means "anywhere in the region"
     rms = float(math.sqrt(np.mean([x["r"] ** 2 for x in m]))) if m else 0.0
     lat, lon = _latlon(prob, best["y"], best["u"])
     best_doc = {"lat": lat, "lon": lon, "start_utc": round(best["T"], 3), "score": round(best["score"], 3),
                 "n_matched": len(m), "rms_s": round(rms, 3), "uncertainty_m": round(unc, 1)}
-    # distinct candidates: refined peaks first, then unrefined coarse peaks
+    # distinct candidates among the refined peaks (every coarse peak was refined)
     cands: list[dict] = []
-    for r in refined + [dict(p, spacing=search.spacing_c) for p in peaks]:
+    for r in refined:
         far = all(float(frame.dist(r["y"], r["u"], q["y"], q["u"])) >= max(2000.0, 2 * search.spacing_c)
                   or abs(r["T"] - q["T"]) > 5.0 for q in cands)
         if far:
@@ -358,8 +395,8 @@ def _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, sp
         if mt is None or ft is None:
             continue
         delay = float(onset_t[mt["onset_id"]] - ft)
-        if delay > 0:
-            j = sa.ids.index(f["strike_id"])
+        j = sa.ids.index(f["strike_id"])
+        if delay > 0 and not sa.seismic[j]:        # flash-to-bang ranging is for air waves
             ranges.append({"strike_id": f["strike_id"], "lat": round(float(sa.lat[j]), 6),
                            "lon": round(float(sa.lon[j]), 6), "distance_m": round(delay * prob.c, 1)})
     _add_notes(notes, mode, best, best_doc, cand_docs, prob, sa, search, region, m, fm, acc_flashes)
@@ -370,22 +407,32 @@ def _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, sp
 def _add_notes(notes, mode, best, best_doc, cand_docs, prob, sa, search, region, m, fm, acc_flashes) -> None:
     frame = prob.frame
     med_sigma = float(np.median(sa.sigma_m))
+    glm_share = np.mean([src.startswith("glm") for src in sa.sources]) if len(sa) else 0.0
     if med_sigma >= 2000:
-        notes.append(f"Catalogue positions are only accurate to {describe_sigma(sa.sigma_m)} (GLM flash centroids), "
+        why = " (GLM flash centroids)" if glm_share > 0.5 else ""
+        notes.append(f"Catalogue positions are only accurate to {describe_sigma(sa.sigma_m)}{why}, "
                      "so expect a few km of uncertainty.")
     n = len(m)
-    if n < 3:
-        notes.append(f"Only {n} onset{'s' if n != 1 else ''} matched: weak result.")
+    if n == 1:
+        d = m[0]["d"]
+        notes.append(f"Only one event matched, at {d / 1000:.1f} km: that fixes the distance to it, not the direction, "
+                     "so the listener can be anywhere on that ring (drawn on the map). More events, a second "
+                     "bang, or a smaller search region narrow it down.")
+    elif n < 3:
+        notes.append(f"Only {n} onsets matched: weak result.")
     elif n < 5 and mode == "free":
         notes.append(f"Only {n} onsets matched with a free clock: treat the result with care.")
+    if any(sa.seismic[x["j"]] for x in m):
+        notes.append("Earthquakes are modelled as heard from the P-wave arrival (about 6 km/s from the hypocentre), "
+                     "so they fix the clock well but the position only weakly.")
     unexplained = prob.K - n
     if n and unexplained > 0:
-        notes.append(f"{unexplained} of {prob.K} onsets are not explained by a catalogued strike "
-                     "(false detections, or strikes the catalogue missed).")
+        notes.append(f"{unexplained} of {prob.K} onsets are not explained by a catalogued event "
+                     "(false detections, or events the catalogue missed).")
     missed = prob.missed_strikes(best["y"], best["u"], best["T"])
     if missed:
-        notes.append(f"{len(missed)} strike{'s' if len(missed) != 1 else ''} within about 5 km should have been heard "
-                     "during the recording but no onset is near the predicted time.")
+        notes.append(f"{len(missed)} catalogued event{'s' if len(missed) != 1 else ''} within about 5 km should have "
+                     "been heard during the recording but no onset is near the predicted time.")
     if len(cand_docs) > 1 and best_doc["score"] > 0:
         r2 = cand_docs[1]
         d = float(frame.dist(*frame.to_yu(r2["lat"], r2["lon"]), best["y"], best["u"]))
@@ -398,5 +445,5 @@ def _add_notes(notes, mode, best, best_doc, cand_docs, prob, sa, search, region,
     if not (in_bbox(inner["lat_min"], inner["lon_min"], region) and in_bbox(inner["lat_max"], inner["lon_max"], region)):
         notes.append("The best point is at the edge of the search region; the true position may lie outside it.")
     if mode == "flash_sync" and fm:
-        notes.append(f"{len(fm)} of {len(acc_flashes)} accepted flashes match strikes at the best clock.")
+        notes.append(f"{len(fm)} of {len(acc_flashes)} accepted flashes match catalogued events at the best clock.")
     notes.append(f"Recording start estimated as {_iso(best_doc['start_utc'])}.")

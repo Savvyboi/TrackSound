@@ -14,7 +14,7 @@ import { useDebounced } from "../../lib/hooks";
 import { fromUtcInput, toUtcInput } from "../../lib/tz";
 import { focusMap, setTab, useWs, ws } from "../../state/workspace";
 import { useCaseData } from "../workspace/caseContext";
-import { eventNumbers, suggestPair } from "./actions";
+import { eventNumbers, strongBetween, suggestPair } from "./actions";
 
 const MODES = [
   { value: "blind" as const, label: "Blind", tip: "Two flyovers, unknown clock: their time gap must match two real flights" },
@@ -135,6 +135,14 @@ export function SearchSection() {
           )}
           {evs.length === 2 && <span className="self-center text-2xs text-fg-faint tnum">{fmtDuration(Math.abs(evs[1].t_cpa - evs[0].t_cpa))} apart</span>}
         </div>
+        {needed === 2 && evs.length === 2 && strongBetween(list, evs[0], evs[1]) > 0 && (
+          <div className="flex items-start gap-1.5 text-2xs leading-snug text-warn">
+            <TriangleAlert className="mt-px size-3 shrink-0" />
+            <span>
+              {strongBetween(list, evs[0], evs[1])} other strong flyover{strongBetween(list, evs[0], evs[1]) > 1 ? "s" : ""} between these two. Adjacent flyovers usually locate better on a busy sky.
+            </span>
+          </div>
+        )}
         {pair && (chosen.length < needed || (needed === 2 && !pair.every((p) => checked.includes(p.id)))) && (
           <button
             className="flex items-center gap-1.5 self-start rounded-md px-1 py-0.5 text-2xs font-medium text-accent hover:bg-accent-soft"
@@ -142,7 +150,7 @@ export function SearchSection() {
           >
             <Sparkles className="size-3" />
             Suggested: #{numbers.get(pair[0].id)}
-            {needed === 2 && ` and #${numbers.get(pair[1].id)}`} (strongest, {fmtDuration(Math.abs(pair[1].t_cpa - pair[0].t_cpa))} apart)
+            {needed === 2 && ` and #${numbers.get(pair[1].id)}`} (strongest adjacent flyovers, {fmtDuration(Math.abs(pair[1].t_cpa - pair[0].t_cpa))} apart)
           </button>
         )}
       </div>
@@ -177,9 +185,11 @@ export function SearchSection() {
       )}
 
       <div className="mb-3 grid grid-cols-2 gap-2.5">
-        <Field label="Grid spacing" hint="Finer is slower">
-          <NumberInput value={spacing} onCommit={(v) => v != null && setSpacing(Math.round(v))} min={20} max={5000} step={50} suffix="m" allowEmpty={false} />
-        </Field>
+        {mode !== "point" && (
+          <Field label="Grid spacing" hint="Finer is slower">
+            <NumberInput value={spacing} onCommit={(v) => v != null && setSpacing(Math.round(v))} min={20} max={5000} step={50} suffix="m" allowEmpty={false} />
+          </Field>
+        )}
         <Field label={mode === "single" ? "Time tolerance" : "Pairing tolerance"} hint={`Default ${mode === "single" ? 30 : 6} s`}>
           <NumberInput value={tol} onCommit={setTol} min={0.5} max={600} step={1} suffix="s" placeholder={mode === "single" ? "30" : "6"} />
         </Field>

@@ -139,7 +139,7 @@ export function drawValueAxis(
   const dec = decimalsFor(step);
   for (let v = first; v <= hi + 1e-9; v += step) {
     const y = Math.round(g.y1 - ((v - lo) / (hi - lo)) * h) + 0.5;
-    if (y < g.y0 + 4) continue;
+    if (y < g.y0 + 14) continue; // keep clear of the unit label
     if (opts.grid !== false) {
       ctx.strokeStyle = th.grid;
       ctx.lineWidth = 1;

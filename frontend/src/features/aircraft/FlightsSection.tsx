@@ -1,4 +1,4 @@
-import { CloudDownload, PlaneTakeoff, Search } from "lucide-react";
+import { CloudDownload, Helicopter, Plane, PlaneTakeoff, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { errorMessage } from "../../api/client";
 import { isActive, useStartJob } from "../../api/jobs";
@@ -12,6 +12,17 @@ import { fmtAgo } from "../../lib/format";
 import { fmtClock } from "../../lib/tz";
 import { setTab, useWs, ws } from "../../state/workspace";
 import { useCaseData } from "../workspace/caseContext";
+import { isHelicopter } from "../map/geometry";
+
+export function CategoryIcon({ category, className }: { category: string | null | undefined; className?: string }) {
+  const heli = isHelicopter(category);
+  const Icon = heli ? Helicopter : Plane;
+  return (
+    <span data-tip={category ?? "Unknown category"} className="inline-flex shrink-0">
+      <Icon className={cn("size-3.5", heli ? "text-[#c026d3] dark:text-[#f0abfc]" : "text-src-aircraft", className)} />
+    </span>
+  );
+}
 
 export function FlightsSection() {
   const c = useCaseData();
@@ -52,7 +63,12 @@ export function FlightsSection() {
       title={
         <span className="flex items-center gap-2">
           Flights
-          {set?.status === "ready" && <span className="font-normal tracking-normal text-fg-faint normal-case tnum">{set.n_flights} prop flights</span>}
+          {set?.status === "ready" && (
+            <span className="font-normal tracking-normal text-fg-faint normal-case tnum">
+              {set.n_flights} flights
+              {set.flights.some((f) => isHelicopter(f.category)) && ` · ${set.flights.filter((f) => isHelicopter(f.category)).length} helicopters`}
+            </span>
+          )}
         </span>
       }
       icon={<PlaneTakeoff />}
@@ -118,7 +134,8 @@ export function FlightsSection() {
                   flightIdx === f.idx ? "bg-accent-soft ring-1 ring-accent-line ring-inset" : "hover:bg-surface-2",
                 )}
               >
-                <span className="min-w-0 truncate">
+                <span className="flex min-w-0 items-center gap-1.5 truncate">
+                  <CategoryIcon category={f.category} />
                   <span className="font-medium text-fg">{f.reg || f.icao.toUpperCase()}</span>{" "}
                   <span className="text-fg-muted">{f.type ?? "?"}</span> <span className="text-fg-faint">{f.desc ?? ""}</span>
                 </span>
