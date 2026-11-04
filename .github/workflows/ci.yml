@@ -18,6 +18,20 @@ jobs:
       - name: Tests
         run: uv run pytest -q
 
+  package:
+    # A clean install of the wheel must start and work: catches runtime dependencies that
+    # are only present in the dev environment.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build --wheel
+        working-directory: backend
+      - name: Install into a clean environment and smoke-test it
+        run: |
+          uv tool install --python 3.12 backend/dist/*.whl
+          uv run --no-project --python 3.12 python .github/scripts/smoke_test.py "$(uv tool dir --bin)/tracksound"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
