@@ -1,6 +1,6 @@
 import type { FeatureCollection } from "geojson";
 import type { AddLayerObject, GeoJSONSource, Map as MLMap } from "maplibre-gl";
-import { ensureIcons, ICONS } from "./icons";
+import { ensureEventIcons, ensureIcons, ICONS } from "./icons";
 import type { HeatImage } from "./geometry";
 
 export type OverlayData = {
@@ -191,12 +191,40 @@ const LAYERS: Layer[] = [
       id: "ts-strikes",
       type: "circle",
       source: sid("strikes"),
+      filter: ["!", ["get", "event"]] as never,
       paint: {
         "circle-radius": ["case", ["get", "matched"], 6, 3.5] as never,
         "circle-color": ["interpolate", ["linear"], ["get", "u"], 0, "#60a5fa", 0.5, "#facc15", 1, "#f43f5e"] as never,
         "circle-opacity": 0.9,
         "circle-stroke-color": ["case", ["get", "matched"], "#ffffff", d.dark ? "#0b0e13" : "#ffffff"] as never,
         "circle-stroke-width": ["case", ["get", "matched"], 1.8, 0.8] as never,
+      },
+    }),
+  },
+  {
+    id: "ts-events-ring",
+    group: "strikes",
+    spec: () => ({
+      id: "ts-events-ring",
+      type: "circle",
+      source: sid("strikes"),
+      filter: ["all", ["get", "event"], ["get", "matched"]] as never,
+      paint: { "circle-radius": 15, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 },
+    }),
+  },
+  {
+    id: "ts-events",
+    group: "strikes",
+    spec: () => ({
+      id: "ts-events",
+      type: "symbol",
+      source: sid("strikes"),
+      filter: ["get", "event"] as never,
+      layout: {
+        "icon-image": ["get", "icon"] as never,
+        "icon-size": ["case", ["get", "matched"], 1.1, 0.9] as never,
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
       },
     }),
   },
@@ -274,7 +302,7 @@ const LAYERS: Layer[] = [
   },
 ];
 
-export const INTERACTIVE_LAYERS = ["ts-flights", "ts-flights-hl", "ts-flights-sel", "ts-strikes"];
+export const INTERACTIVE_LAYERS = ["ts-flights", "ts-flights-hl", "ts-flights-sel", "ts-strikes", "ts-events"];
 
 export type SyncState = { data: Map<string, unknown>; props: Map<string, string>; attrib: Map<string, string> };
 export const newSyncState = (): SyncState => ({ data: new Map(), props: new Map(), attrib: new Map() });
@@ -305,6 +333,7 @@ function enfOpacity(d: OverlayData) {
 /** Make the map's overlay sources and layers match `d` (safe to call after a style swap). */
 export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
   ensureIcons(map, d.dark);
+  ensureEventIcons(map);
   for (const k of SOURCES) {
     const id = sid(k);
     const data = (d[k] as FeatureCollection | null) ?? { type: "FeatureCollection", features: [] };

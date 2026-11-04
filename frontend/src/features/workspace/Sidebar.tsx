@@ -13,10 +13,10 @@ import { SetupTab } from "../setup/SetupTab";
 import { SummaryTab } from "../summary/SummaryTab";
 import { useCaseData } from "./caseContext";
 
-const TAB_META: Record<Tab, { label: string; icon: ReactNode; key: string }> = {
+const TAB_META: Record<Tab, { label: string; icon: ReactNode; key: string; tip?: string }> = {
   setup: { label: "Setup", icon: <Settings2 />, key: "1" },
   aircraft: { label: "Aircraft", icon: <Plane />, key: "2" },
-  lightning: { label: "Lightning", icon: <Zap />, key: "3" },
+  lightning: { label: "Lightning", icon: <Zap />, key: "3", tip: "Lightning & events" },
   enf: { label: "Mains hum", icon: <Activity />, key: "4" },
   alerts: { label: "Alerts", icon: <RadioTower />, key: "5" },
   summary: { label: "Summary", icon: <ClipboardList />, key: "6" },
@@ -52,7 +52,7 @@ export function Sidebar() {
               role="tab"
               aria-selected={tab === t}
               onClick={() => setTab(t)}
-              data-tip={`${m.label} (${m.key})`}
+              data-tip={`${m.tip ?? m.label} (${m.key})`}
               className={cn(
                 "relative flex min-w-0 flex-1 flex-col items-center gap-1 rounded-t-md px-0.5 pt-2 pb-2 text-2xs font-medium transition-colors [&_svg]:size-4",
                 tab === t ? "text-fg" : "text-fg-faint hover:bg-surface-2 hover:text-fg-muted",

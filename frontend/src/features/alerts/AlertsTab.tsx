@@ -189,7 +189,7 @@ function HeaderCard({ h }: { h: SameHeader }) {
           </Button>
           {pts.length > 0 && (
             <Button size="sm" variant="secondary" icon={<MapPinned />} onClick={setRegion}>
-              Set region to these counties
+              Set region around the counties
             </Button>
           )}
         </div>

@@ -178,7 +178,8 @@ export type AircraftCandidate = {
   flights: CandidateFlight[];
 };
 
-export type HeatPoint = { lat: number; lon: number; score: number };
+/** cell_m: the grid cell this point stands for (lightning heat is mixed-resolution). */
+export type HeatPoint = { lat: number; lon: number; score: number; cell_m?: number };
 
 export type AircraftSearch = {
   id: string;
@@ -222,15 +223,18 @@ export type Flash = {
   status: EventStatus;
 };
 
+/** A catalogued or user-entered event: lightning, a blast, an explosion, a sonic boom... */
 export type Strike = {
   id: string;
   t_utc: number;
   lat: number;
   lon: number;
   sigma_m: number;
-  energy: number | null;
-  kind: string | null;
-  source: string;
+  energy: number | null; // GLM: optical energy (J); USGS: magnitude; CSV: as given
+  kind: string | null; // "flash", "cg", "ic", "quarry blast", "explosion", "sonic boom", "earthquake", "event", ...
+  source: string; // "glm-G16" | ... | "usgs" | "csv" | "manual"
+  depth_m?: number;
+  ref?: string; // the catalogue's own event id
 };
 
 export type StrikeSet = {

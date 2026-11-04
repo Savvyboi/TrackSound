@@ -123,3 +123,15 @@ def test_reupload_clears_recording_results(make_case, client, tmp_path):
         assert (d / kept).exists(), kept
     c = client.get(f"/api/cases/{cid}").json()
     assert c["start_utc"] is None and c["recording"]["filename"] == "second.wav" and c["recording"]["status"] == "ready"
+
+
+def test_report_includes_alerts_estimate():
+    from tracksound.api.report import _estimates
+    alerts = {"headers": [
+        {"id": "sh_a", "event": "RWT", "event_name": "Required Weekly Test", "station": "KEAX/NWS", "confidence": 0.4,
+         "implied_start_utc": 100.0, "locations": []},
+        {"id": "sh_b", "event": "TOR", "event_name": "Tornado Warning", "station": "KEAX/NWS", "confidence": 0.99,
+         "implied_start_utc": 200.0, "locations": [{"county": "Jackson County", "state": "MO", "lat": 39.0, "lon": -94.3}]}]}
+    est = _estimates([], {}, {}, alerts)
+    assert est == [{"source": "alerts", "header_id": "sh_b", "event": "Tornado Warning", "station": "KEAX/NWS",
+                    "start_utc": 200.0, "confidence": 0.99, "counties": ["Jackson County, MO"], "lat": 39.0, "lon": -94.3}]

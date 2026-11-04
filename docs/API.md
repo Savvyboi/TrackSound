@@ -16,7 +16,8 @@ change this file in the same commit.
   in `_m`.
 - **Region / bbox:** `{ "lat_min": number, "lat_max": number, "lon_min": number, "lon_max": number }`.
 - **IDs:** short strings with a prefix: `c_` case, `j_` job, `ae_` aircraft event, `as_`
-  aircraft search, `lo_` thunder onset, `lf_` flash, `ls_` lightning solve, `em_` ENF match.
+  aircraft search, `lo_` thunder onset, `lf_` flash, `st_` strike or known event, `ls_`
+  lightning solve, `em_` ENF match, `er_` imported ENF reference, `sh_` alert (SAME) header.
 - **Errors:** JSON `{ "detail": ... }`.
   - 400: bad input.
   - 404: missing.
@@ -437,25 +438,45 @@ AFSK at 520.83 baud, sent three times) that names the originator, event, affecte
 it gives a county-level region and a clock anchor.
 
 ```ts
-type SameLocation = { code: string; part: string; fips: string; state: string | null; county: string | null;
-                      lat: number | null; lon: number | null };   // county centroid (US Census gazetteer)
+type SameLocation = {
+  code: string;                 // PSSCCC as sent, e.g. "139069"
+  part: string;                 // P as a word: "all" (0), "northwest" (1) ... "southeast" (9)
+  fips: string;                 // SSCCC, e.g. "39069"
+  state: string | null;         // USPS abbreviation; null for marine zones and all-US codes
+  county: string | null;        // "Henry County"; "Entire state" (CCC 000); "All of the United States" (000000);
+                                // marine zone name with its NWS ID, e.g. "... (ANZ530)"; null if unknown
+  lat: number | null; lon: number | null;   // county internal point (US Census Gazetteer), land-weighted
+                                            // state centroid, or NWS marine-zone centroid
+};
 type SameHeader = {
-  id: string;
-  t: number;                    // recording time of the first decoded burst of this header
+  id: string;                   // "sh_..." (new ids on every scan)
+  t: number;                    // recording time where the first decoded burst (its preamble) starts
   repeats: number;              // how many of the (normally 3) bursts decoded
   raw: string;                  // e.g. "ZCZC-WXR-TOR-029095+0030-1281917-KEAX/NWS-"
   originator: string; originator_name: string;   // "WXR" → "National Weather Service"
   event: string; event_name: string;             // "TOR" → "Tornado Warning", "RWT" → "Required Weekly Test"
   locations: SameLocation[];
   purge_minutes: number;
-  issued_utc: number;           // from the JJJHHMM field; the year comes from the case date (or is inferred)
+  issued_utc: number;           // JJJHHMM; year from the case date, else the file's creation-time tag, else the
+                                // latest such day before the scan (recomputed on every GET, so a date change applies)
   station: string;              // e.g. "KEAX/NWS"
-  implied_start_utc: number;    // issued_utc - t: assumes the burst aired at the issue time (often within minutes; relays can be later)
-  confidence: number;           // 0..1 (bursts agreeing, bit errors corrected)
+  implied_start_utc: number;    // issued_utc - t: assumes the burst aired at the issue minute (usually 0-2 min
+                                // earlier than the truth; relays and rebroadcasts can be much later)
+  confidence: number;           // 0..1: estimated probability the decoded text is exactly right, lowered for a
+                                // lone burst, an unknown event or an unmapped location. Below 0.2: notes only
 };
 ```
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
-| GET | `/api/cases/{id}/alerts` | | `{ headers: SameHeader[], eom: { t: number }[], scanned_at: number \| null, notes: string[] }` |
-| POST | `/api/cases/{id}/alerts/scan` | `{}` | `Job`; result `{ count }`. Decodes from the original upload at a higher sample rate (the 4 kHz copy is too low for the 1562.5/2083.3 Hz tones) |
+| GET | `/api/cases/{id}/alerts` | | `{ headers: SameHeader[], eom: { t: number }[], scanned_at: number \| null, notes: string[] }`. Headers sorted by `t`; one `eom` entry per group of up to 3 `NNNN` bursts (time of the first) |
+| POST | `/api/cases/{id}/alerts/scan` | `{ crosscheck?: true }` | `Job` (kind `alerts.scan`); result `{ count }` (headers decoded). Replaces the previous scan. Decodes the original upload at 11,025 Hz (the 4 kHz copy is too low for the 1562.5/2083.3 Hz tones), streaming it, so long files are fine. `crosscheck` also looks each header up in FEMA's IPAWS archive (network; only a ±15 min time window is sent). 400 if there is no recording or the original upload is missing; 409 while the recording is processing or a scan is running |
+
+`notes` are plain-language lines:
+- which reference gave the issue year;
+- the broadcast-delay caveat;
+- per header: bursts missing or corrected by combining, codes corrected to the nearest known
+  code, the attention signal that followed (EAS 853 + 960 Hz or NOAA Weather Radio 1050 Hz),
+  the IPAWS cross-check result, and Canadian stations (location codes not mapped);
+- bursts that looked like SAME but could not be decoded;
+- EAS attention signals with no decodable header.

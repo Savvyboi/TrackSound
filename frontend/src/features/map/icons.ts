@@ -1,4 +1,5 @@
 import type { Map as MLMap } from "maplibre-gl";
+import { EVENT_STYLE, type EventIcon } from "../lightning/kinds";
 
 /** Map icons drawn on a canvas (no sprite server needed). Both point east (direction of travel). */
 const SIZE = 40; // px at pixelRatio 2 → 20 css px
@@ -88,4 +89,117 @@ export function ensureIcons(map: MLMap, dark: boolean) {
     else if (recolour) map.updateImage(ic.id, data());
   }
   registered.set(map, dark);
+}
+
+// ---- non-lightning events (blasts, booms, quakes ...) -------------------------------------
+
+
+const EV = 48; // px at pixelRatio 2 → 24 css px
+
+function drawEvent(kind: Exclude<EventIcon, "lightning">): ImageData {
+  const c = document.createElement("canvas");
+  c.width = EV;
+  c.height = EV;
+  const ctx = c.getContext("2d")!;
+  ctx.translate(EV / 2, EV / 2);
+  ctx.scale(EV / 22, EV / 22); // draw in a -11..11 box
+  const color = EVENT_STYLE[kind].color;
+  const outline = "rgba(6,8,12,0.9)";
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  const star = (n: number, ro: number, ri: number) => {
+    ctx.beginPath();
+    for (let i = 0; i < n * 2; i++) {
+      const r = i % 2 ? ri : ro;
+      const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+      if (i) ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      else ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+  };
+  const fillOutlined = () => {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = outline;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+  if (kind === "blast") {
+    star(8, 9.5, 4.2);
+    fillOutlined();
+  } else if (kind === "fireworks") {
+    star(4, 9.5, 2.6);
+    fillOutlined();
+    for (const [x, y, r] of [
+      [6.8, -6.8, 1.8],
+      [-6.8, 6.8, 1.5],
+    ]) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      fillOutlined();
+    }
+  } else if (kind === "boom") {
+    const path = () => {
+      ctx.beginPath();
+      ctx.moveTo(-7.5, -7.5);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(-7.5, 7.5);
+      ctx.moveTo(0, -7.5);
+      ctx.lineTo(7.5, 0);
+      ctx.lineTo(0, 7.5);
+    };
+    path();
+    ctx.lineWidth = 5.5;
+    ctx.strokeStyle = outline;
+    ctx.stroke();
+    path();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+  } else if (kind === "quake") {
+    for (const r of [8.5, 4.8]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = outline;
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  } else if (kind === "meteor") {
+    ctx.beginPath();
+    ctx.moveTo(-9, -9);
+    ctx.lineTo(2, 2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.75;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.arc(3.5, 3.5, 5, 0, Math.PI * 2);
+    fillOutlined();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(0, -9.5);
+    ctx.lineTo(9.5, 0);
+    ctx.lineTo(0, 9.5);
+    ctx.lineTo(-9.5, 0);
+    ctx.closePath();
+    fillOutlined();
+  }
+  return ctx.getImageData(0, 0, EV, EV);
+}
+
+export const EVENT_ICON_IDS = Object.keys(EVENT_STYLE).map((k) => `ts-ev-${k}`);
+
+export function ensureEventIcons(map: MLMap) {
+  for (const k of Object.keys(EVENT_STYLE) as Exclude<EventIcon, "lightning">[]) {
+    const id = `ts-ev-${k}`;
+    if (!map.hasImage(id)) map.addImage(id, drawEvent(k), { pixelRatio: 2 });
+  }
 }

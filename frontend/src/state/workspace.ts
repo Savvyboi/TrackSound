@@ -6,7 +6,7 @@ import { createStore, loadPref, savePref } from "../lib/store";
 export type Tab = "setup" | "aircraft" | "lightning" | "enf" | "alerts" | "summary";
 export type TimelineMode = "spectrogram" | "thunder" | "enf";
 export type Tool = "pan" | "box" | "add-onset" | "add-flash";
-export type MapTool = "none" | "region" | "pick-point";
+export type MapTool = "none" | "region" | "pick-point" | "pick-event";
 export type Speed = 1 | 4 | 8;
 
 export const TABS: Tab[] = ["setup", "aircraft", "lightning", "enf", "alerts", "summary"];
@@ -83,6 +83,8 @@ export type WorkspaceState = Prefs & {
   alertId: string | null;
   hoverT: number | null;
   pickPoint: { lat: number; lon: number } | null;
+  /** location chosen on the map for a known event being entered (Lightning tab) */
+  eventPick: { lat: number; lon: number } | null;
   searchMode: "blind" | "point" | "single";
   mapFocus: MapFocus | null;
   playback: Playback;
@@ -116,6 +118,7 @@ const INITIAL: Omit<WorkspaceState, keyof Prefs> = {
   alertId: null,
   hoverT: null,
   pickPoint: null,
+  eventPick: null,
   searchMode: "blind",
   mapFocus: null,
   playback: { state: "idle", t: null, range: null },
@@ -161,7 +164,8 @@ export function setTab(tab: Tab) {
   const s = ws.get();
   if (s.caseId) savePref(tabKey(s.caseId), tab);
   const tool = modeForTab(tab) === "spectrogram" ? (s.tool === "add-onset" || s.tool === "add-flash" ? "pan" : s.tool) : s.tool === "box" ? "pan" : s.tool;
-  ws.set({ tab, tool, boxDraft: null, mapTool: s.mapTool === "pick-point" && tab !== "aircraft" ? "none" : s.mapTool });
+  const mapTool = (s.mapTool === "pick-point" && tab !== "aircraft") || (s.mapTool === "pick-event" && tab !== "lightning") ? "none" : s.mapTool;
+  ws.set({ tab, tool, boxDraft: null, mapTool });
 }
 
 // ---- time viewport ----------------------------------------------------------------------

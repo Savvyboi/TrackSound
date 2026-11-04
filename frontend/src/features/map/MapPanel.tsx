@@ -26,7 +26,7 @@ import { fmtCoord } from "../../lib/format";
 import { bboxPolygon, normalizeBBox, validBBox } from "../../lib/geo";
 import { loadPref, savePref } from "../../lib/store";
 import { useTheme } from "../../lib/theme";
-import { fmtClock } from "../../lib/tz";
+import { fmtClock, fmtDateIso } from "../../lib/tz";
 import { toggleLayer, useWs, ws, type Layers } from "../../state/workspace";
 import { caseC, caseDuration, caseTz, useCaseData } from "../workspace/caseContext";
 import { BASEMAPS, isDarkBasemap, styleFor, type BasemapId } from "./basemaps";
@@ -60,6 +60,7 @@ export function MapPanel() {
   const solveId = useWs((s) => s.solveId);
   const flightIdx = useWs((s) => s.flightIdx);
   const pickPoint = useWs((s) => s.pickPoint);
+  const eventPick = useWs((s) => s.eventPick);
   const mapFocus = useWs((s) => s.mapFocus);
   const checked = useWs((s) => s.checkedEventIds);
   const flightsDuringOnly = useWs((s) => s.flightsDuringOnly);
@@ -317,7 +318,7 @@ export function MapPanel() {
       map.boxZoom.disable();
       map.doubleClickZoom.disable();
       canvas.style.cursor = "crosshair";
-    } else if (mapTool === "pick-point") {
+    } else if (mapTool === "pick-point" || mapTool === "pick-event") {
       canvas.style.cursor = "crosshair";
     } else {
       canvas.style.cursor = "";
@@ -354,6 +355,10 @@ export function MapPanel() {
       const p = { lat: e.lngLat.lat, lon: e.lngLat.lng };
       if (s.mapTool === "pick-point") {
         ws.set({ pickPoint: p, mapTool: "none", searchMode: "point" });
+        return;
+      }
+      if (s.mapTool === "pick-event") {
+        ws.set({ eventPick: p, mapTool: "none" });
         return;
       }
       const hits = map.queryRenderedFeatures(e.point, { layers: INTERACTIVE_LAYERS.filter((l) => map.getLayer(l)) });
@@ -403,9 +408,16 @@ export function MapPanel() {
           <div style="opacity:.6;margin-top:2px">${Number.isFinite(t0) ? `${fmtClock(t0, "UTC", false)}–${fmtClock(t1, "UTC", false)} UTC` : ""}</div>`;
       } else {
         const t = Number(p.t_utc);
-        html = `<div style="font-weight:600">Lightning ${esc(p.kind || "strike")}</div>
-          <div style="opacity:.75">${Number.isFinite(t) ? `${fmtClock(t, "UTC")} UTC · ${fmtClock(t, tz)} local` : ""}</div>
-          <div style="opacity:.6">${esc(p.source || "")}${p.matched === true || p.matched === "true" ? " · matched" : ""}</div>`;
+        const isEvent = p.event === true || p.event === "true";
+        const matched = p.matched === true || p.matched === "true";
+        const when = Number.isFinite(t) ? `${fmtDateIso(t, "UTC")} ${fmtClock(t, "UTC")} UTC · ${fmtClock(t, tz)} local` : "";
+        const extra: string[] = [];
+        if (isEvent && p.energy != null && p.energy !== "null" && String(p.source).startsWith("usgs")) extra.push(`M ${Number(p.energy).toFixed(1)}`);
+        if (p.depth_m != null && p.depth_m !== "null") extra.push(`depth ${(Number(p.depth_m) / 1000).toFixed(1)} km`);
+        if (p.sigma_m != null) extra.push(`±${Math.round(Number(p.sigma_m))} m`);
+        html = `<div style="font-weight:600;text-transform:${isEvent ? "capitalize" : "none"}">${isEvent ? esc(p.kind || "event") : `Lightning ${esc(p.kind || "strike")}`}</div>
+          <div style="opacity:.75">${when}</div>
+          <div style="opacity:.6">${esc(p.source || "")}${p.ref && p.ref !== "null" ? ` · ${esc(p.ref)}` : ""}${extra.length ? ` · ${extra.join(" · ")}` : ""}${matched ? " · matched" : ""}</div>`;
       }
       popup.setLngLat(e.lngLat).setHTML(html).addTo(map);
     };
@@ -465,11 +477,14 @@ export function MapPanel() {
         }
       }
     }
+    if (eventPick && tab === "lightning") {
+      items.push({ id: "event-pick", lng: eventPick.lon, lat: eventPick.lat, kind: "pick", label: "", active: true, title: "Location of the event being added" });
+    }
     if (pickPoint && (tab === "aircraft" || mapTool === "pick-point")) {
       items.push({ id: "pick", lng: pickPoint.lon, lat: pickPoint.lat, kind: "pick", label: "", active: true, title: "Known point to check" });
     }
     return items;
-  }, [layers.candidates, layers.lightning, search.data, rank, solve.data, pickPoint, tab, mapTool, alerts.data, alertId]);
+  }, [layers.candidates, layers.lightning, search.data, rank, solve.data, pickPoint, eventPick, tab, mapTool, alerts.data, alertId]);
   useMarkers(mapRef, markerItems);
 
   // close the click popup when its preconditions go away
@@ -486,7 +501,12 @@ export function MapPanel() {
       <MapToolbar basemap={basemap} setBasemap={setBasemap} effective={effective} hasGrid={!gridMap.error} />
       {mapTool !== "none" && (
         <div className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line-strong bg-surface/95 px-3 py-1.5 text-xs text-fg shadow-pop">
-          {mapTool === "region" ? "Drag a rectangle to set the search region" : "Click the map to choose the point to check"} ·{" "}
+          {mapTool === "region"
+            ? "Drag a rectangle to set the search region"
+            : mapTool === "pick-event"
+              ? "Click the map where the event happened"
+              : "Click the map to choose the point to check"}{" "}
+          ·{" "}
           <span className="text-fg-muted">Esc to cancel</span>
         </div>
       )}

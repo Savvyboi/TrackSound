@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection } from "geojson";
 import type { AircraftCandidate, FlightsGeoJSON, HeatPoint, LightningSolve, Strike } from "../../api/types";
 import { colormapRGB } from "../../lib/colormap";
+import { eventIcon } from "../lightning/kinds";
 import { circleRing } from "../../lib/geo";
 
 export const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -80,6 +81,7 @@ export type HeatImage = { url: string; coordinates: [[number, number], [number, 
  */
 export function heatImage(points: HeatPoint[] | undefined | null, fallbackSpacingM: number): HeatImage | null {
   if (!points?.length) return null;
+  if (points.every((p) => typeof p.cell_m === "number" && p.cell_m > 0)) return heatImageCells(points);
   const n = points.length;
   const lat0 = points.reduce((a, p) => a + p.lat, 0) / n;
   const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
@@ -176,6 +178,74 @@ export function heatImage(points: HeatPoint[] | undefined | null, fallbackSpacin
   };
 }
 
+/**
+ * Heat with explicit cell sizes (lightning solves): each point is a cell_m square, drawn
+ * coarse first so finer cells sit on top (as docs/API.md describes).
+ */
+function heatImageCells(points: HeatPoint[]): HeatImage | null {
+  const n = points.length;
+  const lat0 = points.reduce((a, p) => a + p.lat, 0) / n;
+  const kx = 111320 * Math.cos((lat0 * Math.PI) / 180);
+  const ky = 111320;
+  let lo = Infinity, hi = -Infinity, x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, fine = Infinity;
+  for (const p of points) {
+    const h = p.cell_m! / 2;
+    const x = p.lon * kx;
+    const y = p.lat * ky;
+    lo = Math.min(lo, p.score);
+    hi = Math.max(hi, p.score);
+    x0 = Math.min(x0, x - h);
+    x1 = Math.max(x1, x + h);
+    y0 = Math.min(y0, y - h);
+    y1 = Math.max(y1, y + h);
+    fine = Math.min(fine, p.cell_m!);
+  }
+  const res = Math.max(fine / 2, (x1 - x0) / 1400, (y1 - y0) / 1400, 1);
+  const W = Math.max(1, Math.ceil((x1 - x0) / res));
+  const H = Math.max(1, Math.ceil((y1 - y0) / res));
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const img = ctx.createImageData(W, H);
+  const d = img.data;
+  const rgb = colormapRGB("magma");
+  const span = hi - lo || 1;
+  const order = points.slice().sort((a, b) => b.cell_m! - a.cell_m!);
+  for (const p of order) {
+    const h = p.cell_m! / 2;
+    const x = p.lon * kx;
+    const y = p.lat * ky;
+    const ca = Math.max(0, Math.round((x - h - x0) / res));
+    const cb = Math.min(W, Math.round((x + h - x0) / res));
+    const ra = Math.max(0, Math.round((y1 - (y + h)) / res));
+    const rb = Math.min(H, Math.round((y1 - (y - h)) / res));
+    const u = (p.score - lo) / span;
+    const k = Math.round((0.2 + 0.8 * u) * 255) * 3;
+    const a = Math.round(255 * (0.2 + 0.72 * Math.pow(u, 1.3)));
+    for (let r = ra; r < rb; r++) {
+      for (let cc = ca; cc < cb; cc++) {
+        const o = (r * W + cc) * 4;
+        d[o] = rgb[k];
+        d[o + 1] = rgb[k + 1];
+        d[o + 2] = rgb[k + 2];
+        d[o + 3] = a;
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return {
+    url: canvas.toDataURL("image/png"),
+    coordinates: [
+      [x0 / kx, y1 / ky],
+      [x1 / kx, y1 / ky],
+      [x1 / kx, y0 / ky],
+      [x0 / kx, y0 / ky],
+    ],
+  };
+}
+
 export function strikesFC(strikes: Strike[] | undefined, matched: Set<string>): FeatureCollection {
   if (!strikes?.length) return EMPTY;
   let lo = Infinity;
@@ -187,11 +257,28 @@ export function strikesFC(strikes: Strike[] | undefined, matched: Set<string>): 
   const span = hi - lo || 1;
   return {
     type: "FeatureCollection",
-    features: strikes.map((s) => ({
-      type: "Feature",
-      properties: { id: s.id, u: (s.t_utc - lo) / span, t_utc: s.t_utc, energy: s.energy, kind: s.kind, source: s.source, matched: matched.has(s.id) },
-      geometry: { type: "Point", coordinates: [s.lon, s.lat] },
-    })),
+    features: strikes.map((s) => {
+      const icon = eventIcon(s.kind);
+      return {
+        type: "Feature",
+        properties: {
+          id: s.id,
+          u: (s.t_utc - lo) / span,
+          t_utc: s.t_utc,
+          energy: s.energy,
+          kind: s.kind,
+          source: s.source,
+          ref: s.ref ?? null,
+          depth_m: s.depth_m ?? null,
+          sigma_m: s.sigma_m,
+          matched: matched.has(s.id),
+          // non-lightning events get their own symbol by kind
+          event: icon !== "lightning",
+          icon: icon === "lightning" ? "" : `ts-ev-${icon}`,
+        },
+        geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+      };
+    }),
   };
 }
 

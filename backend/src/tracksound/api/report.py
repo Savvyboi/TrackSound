@@ -27,7 +27,23 @@ async def _get(client: httpx.AsyncClient, path: str):
     return {"error": f"HTTP {r.status_code}", "detail": (r.json().get("detail") if r.headers.get("content-type", "").startswith("application/json") else None)}
 
 
-def _estimates(aircraft_searches, lightning, enf) -> list[dict]:
+def _alerts_estimate(alerts) -> dict | None:
+    """The most confident decoded emergency-alert header: counties and an implied start time."""
+    headers = (alerts or {}).get("headers") if isinstance(alerts, dict) else None
+    if not headers:
+        return None
+    h = max(headers, key=lambda h: h.get("confidence") or 0)
+    locs = [loc for loc in h.get("locations", []) if loc.get("lat") is not None]
+    est = {"source": "alerts", "header_id": h["id"], "event": h.get("event_name") or h.get("event"),
+           "station": h.get("station"), "start_utc": h.get("implied_start_utc"), "confidence": h.get("confidence"),
+           "counties": [f"{loc.get('county')}, {loc.get('state')}" for loc in h.get("locations", []) if loc.get("county")]}
+    if locs:
+        est["lat"] = sum(loc["lat"] for loc in locs) / len(locs)
+        est["lon"] = sum(loc["lon"] for loc in locs) / len(locs)
+    return est
+
+
+def _estimates(aircraft_searches, lightning, enf, alerts=None) -> list[dict]:
     """The best result per source, in one shape."""
     out = []
     done = [s for s in (aircraft_searches if isinstance(aircraft_searches, list) else []) if s.get("status") == "done" and s.get("best")]
@@ -54,6 +70,9 @@ def _estimates(aircraft_searches, lightning, enf) -> list[dict]:
                 m = max(matches, key=lambda m: m["best"].get("z") or 0)
                 e.update(reference_id=m["reference_id"], start_utc=m["best"]["start_utc"], corr=m["best"]["corr"], z=m["best"]["z"])
             out.append(e)
+    a = _alerts_estimate(alerts)
+    if a:
+        out.append(a)
     return out
 
 
@@ -68,13 +87,16 @@ async def report(case_id: str, request: Request, store: Store = Depends(get_stor
         searches = await _get(client, f"{base}/aircraft/searches")
         lightning = await _get(client, f"{base}/lightning")
         enf = await _get(client, f"{base}/enf")
+        alerts = await _get(client, f"{base}/alerts")
     if isinstance(flights, dict) and "flights" in flights:
         flights = {k: v for k, v in flights.items() if k != "flights"}
     return {
         "generated_at": time.time(), "tracksound_version": __version__, "case": case,
-        "estimates": _estimates(searches, lightning, enf),
+        "estimates": _estimates(searches, lightning, enf, alerts),
         "aircraft": {"events": events, "flights": flights, "searches": searches},
-        "lightning": lightning, "enf": enf,
+        "lightning": lightning, "enf": enf, "alerts": alerts,
         "attribution": ["ADS-B history: adsb.lol contributors (ODbL 1.0)", "Terrain: AWS Terrain Tiles (Mapzen and partners)",
-                        "Lightning: NOAA GOES GLM (public domain) where used"],
+                        "Lightning: NOAA GOES GLM (public domain) where used",
+                        "Seismic and explosion events: USGS ComCat (public domain) where used",
+                        "Counties: US Census Gazetteer (public domain)"],
     }

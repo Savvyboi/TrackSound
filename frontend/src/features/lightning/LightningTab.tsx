@@ -2,13 +2,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Clock3,
-  CloudDownload,
   CloudLightning,
-  FileUp,
   Info,
   ListOrdered,
   LocateFixed,
-  MapPin,
   Play,
   Plus,
   Radio,
@@ -16,24 +13,25 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage } from "../../api/client";
 import { isActive, useStartJob } from "../../api/jobs";
 import { casePath, qk, useCaseJobs, useLightning, usePatchCase, useSolve, useStrikes } from "../../api/queries";
 import type { EventStatus, Flash, LightningSolveSummary, ThunderOnset } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
-import { Field, Input, NumberInput, Slider, Switch } from "../../components/ui/form";
+import { Field, NumberInput, Slider, Switch } from "../../components/ui/form";
 import { Badge, EmptyState, ErrorNote, Hint, KV, ProgressBar, Section, Skeleton } from "../../components/ui/misc";
 import { confirmDialog } from "../../components/ui/overlay";
 import { toast } from "../../components/ui/toast";
 import { cn } from "../../lib/cn";
-import { fmtAgo, fmtDist, fmtDuration, fmtInt, fmtLatLonPretty, fmtNum, fmtRec, fmtSigned } from "../../lib/format";
+import { fmtAgo, fmtDist, fmtLatLonPretty, fmtNum, fmtRec, fmtSigned } from "../../lib/format";
 import { circleRing } from "../../lib/geo";
-import { fmtClock, fmtDateTime, fmtUtc, fromUtcInput, toUtcInput, utcDayRange } from "../../lib/tz";
+import { fmtClock, fmtDateTime, fmtUtc } from "../../lib/tz";
 import { focusMap, focusTime, useWs, ws } from "../../state/workspace";
 import { STATUS_COLOR } from "../timeline/TimelineCanvas";
-import { caseDuration, caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
+import { caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
 import { useLightningActions } from "./actions";
+import { CatalogueSection, KnownEventSection } from "./Catalogue";
 
 export function LightningTab() {
   const c = useCaseData();
@@ -47,10 +45,17 @@ export function LightningTab() {
   }
   return (
     <div>
+      <div className="border-b border-line px-4 pt-3.5 pb-3">
+        <div className="text-sm font-semibold text-fg">Lightning & events</div>
+        <p className="mt-0.5 text-xs leading-relaxed text-fg-muted">
+          Thunder, blasts, explosions and other sharp sounds whose time and place are on record. Match their onsets to find where and when.
+        </p>
+      </div>
       <DetectSection />
       <OnsetsSection />
       {(c.recording?.has_video || (st.data?.flashes.length ?? 0) > 0) && <FlashesSection />}
-      <StrikesSection />
+      <CatalogueSection />
+      <KnownEventSection />
       <SolveSection />
       <SolveResults />
     </div>
@@ -359,165 +364,6 @@ function MarkerRow({
       </div>
       <StatusButtons status={item.status} onSet={onStatus} onDelete={onDelete} />
     </div>
-  );
-}
-
-// ---- strikes -------------------------------------------------------------------------------
-
-function defaultWindow(c: ReturnType<typeof useCaseData>): [number, number] | null {
-  const D = caseDuration(c);
-  if (c.start_utc != null) {
-    const a = c.start_utc - 3600;
-    const b = Math.min(c.start_utc + D + 3600, a + 6 * 3600);
-    return [Math.floor(a), Math.ceil(b)];
-  }
-  if (c.date) {
-    const r = utcDayRange(c.date);
-    if (r) return [r[0] + 12 * 3600, r[0] + 18 * 3600];
-  }
-  return null;
-}
-
-function StrikesSection() {
-  const c = useCaseData();
-  const qc = useQueryClient();
-  const st = useLightning(c.id);
-  const set = st.data?.strikes ?? null;
-  const strikes = useStrikes(c.id, !!set?.count);
-  const startJob = useStartJob();
-  const job = useLightningJob("strike");
-  const win = useMemo(() => defaultWindow(c), [c]);
-  const [t0, setT0] = useState(win ? toUtcInput(win[0]) : "");
-  const [t1, setT1] = useState(win ? toUtcInput(win[1]) : "");
-  useEffect(() => {
-    if (win) {
-      setT0(toUtcInput(win[0]));
-      setT1(toUtcInput(win[1]));
-    }
-  }, [win]);
-  const a = t0 ? fromUtcInput(t0) : null;
-  const b = t1 ? fromUtcInput(t1) : null;
-  const span = a != null && b != null ? b - a : null;
-  const invalid = span != null && (span <= 0 || span > 6 * 3600);
-  const file = useRef<HTMLInputElement>(null);
-  const [importing, setImporting] = useState(false);
-
-  const fetchGlm = async () => {
-    if (a == null || b == null) return;
-    try {
-      await startJob(`${casePath(c.id)}/lightning/strikes/fetch`, { source: "glm", satellite: "auto", t0_utc: a, t1_utc: b }, { success: (j) => `${fmtInt(j.result?.count ?? 0)} strikes` });
-    } catch (e) {
-      toast({ tone: "error", title: "Could not start the download", body: errorMessage(e) });
-    }
-  };
-  const importCsv = async (f: File) => {
-    setImporting(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", f, f.name);
-      const r = await api.form<{ count: number }>(`${casePath(c.id)}/lightning/strikes/import`, fd);
-      toast({ tone: "success", title: "Strikes imported", body: `${fmtInt(r.count)} from ${f.name}` });
-      void qc.invalidateQueries({ queryKey: qk.lightning(c.id) });
-    } catch (e) {
-      toast({ tone: "error", title: "Import failed", body: errorMessage(e) });
-    } finally {
-      setImporting(false);
-    }
-  };
-  const clear = async () => {
-    const ok = await confirmDialog({ title: "Remove all strikes?", body: "Solves keep their results, but new solves need strikes again.", confirmLabel: "Remove", danger: true });
-    if (!ok) return;
-    try {
-      await api.del(`${casePath(c.id)}/lightning/strikes`);
-      void qc.invalidateQueries({ queryKey: qk.lightning(c.id) });
-    } catch (e) {
-      toast({ tone: "error", title: "Could not remove the strikes", body: errorMessage(e) });
-    }
-  };
-
-  return (
-    <Section
-      title={
-        <span className="flex items-center gap-2">
-          Strikes {set && <span className="font-normal tracking-normal text-fg-faint normal-case tnum">{fmtInt(set.count)}</span>}
-        </span>
-      }
-      icon={<MapPin />}
-    >
-      {set ? (
-        <div className="mb-3 rounded-lg border border-line bg-surface-2 px-3 py-2">
-          <div className="flex items-center justify-between">
-            <Badge tone="lightning">{set.source}</Badge>
-            <IconButton size="xs" label="Remove strikes" onClick={clear} className="hover:!text-danger">
-              <Trash2 />
-            </IconButton>
-          </div>
-          <KV label="Window">
-            {fmtClock(set.t0_utc, "UTC", false)}–{fmtClock(set.t1_utc, "UTC", false)} UTC
-          </KV>
-          <KV label="Strikes">{fmtInt(set.count)}</KV>
-          <KV label="Fetched">{fmtAgo(set.fetched_at)}</KV>
-          {strikes.data && strikes.data.strikes.length > 0 && (
-            <button
-              className="mt-1 text-2xs font-medium text-accent hover:underline"
-              onClick={() => {
-                const pts = strikes.data!.strikes;
-                const lats = pts.map((p) => p.lat);
-                const lons = pts.map((p) => p.lon);
-                focusMap({ bbox: { lat_min: Math.min(...lats), lat_max: Math.max(...lats), lon_min: Math.min(...lons), lon_max: Math.max(...lons) } });
-              }}
-            >
-              Show on map
-            </button>
-          )}
-        </div>
-      ) : (
-        <p className="mb-3 text-xs leading-relaxed text-fg-muted">Lightning strikes near the region and time: from GOES satellites (Americas only) or a CSV from any network.</p>
-      )}
-
-      {job ? (
-        <JobBox job={job} title="Fetching GOES GLM flashes…" note="Downloads files from NOAA's public buckets." />
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          <div className="grid grid-cols-[44px_1fr] items-center gap-x-2 gap-y-1.5">
-            <span className="text-xs text-fg-muted">From</span>
-            <Input type="datetime-local" step={60} value={t0} onChange={(e) => setT0(e.target.value)} aria-label="Strikes from (UTC)" suffix="UTC" />
-            <span className="text-xs text-fg-muted">To</span>
-            <Input type="datetime-local" step={60} value={t1} onChange={(e) => setT1(e.target.value)} aria-label="Strikes to (UTC)" suffix="UTC" />
-          </div>
-          <div className={cn("text-2xs", invalid ? "text-danger" : "text-fg-faint")}>
-            {span == null
-              ? c.start_utc == null && !c.date
-                ? "Set the date or start time in Setup to prefill the window."
-                : ""
-              : invalid
-                ? span <= 0
-                  ? "The end must be after the start."
-                  : `At most 6 hours (this is ${fmtDuration(span)}).`
-                : `${fmtDuration(span)} window${c.start_utc != null ? " around the recording" : ""} · GOES GLM covers the Americas only`}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" variant={set ? "secondary" : "primary"} icon={<CloudDownload />} disabled={a == null || b == null || invalid} onClick={fetchGlm}>
-              Fetch GOES GLM
-            </Button>
-            <Button size="sm" variant="secondary" icon={<FileUp />} loading={importing} onClick={() => file.current?.click()} tip="CSV with columns time (ISO-8601 or unix s), lat, lon; optional sigma_m, energy, kind">
-              Import CSV
-            </Button>
-            <input
-              ref={file}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void importCsv(f);
-                e.target.value = "";
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </Section>
   );
 }
 

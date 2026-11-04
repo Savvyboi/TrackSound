@@ -20,7 +20,7 @@ export function jobLabel(kind: string): string {
   if (has("aircraft", "search")) return "Aircraft search";
   if (has("thunder")) return "Detecting thunder";
   if (has("flash")) return "Detecting flashes";
-  if (has("lightning", "strike")) return "Fetching lightning strikes";
+  if (has("lightning", "strike")) return "Fetching strikes and events";
   if (has("lightning", "solve")) return "Lightning solve";
   if (has("enf", "extract")) return "Extracting mains hum";
   if (has("enf", "match")) return "Matching mains hum";
