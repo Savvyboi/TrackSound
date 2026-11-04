@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel
 
+from .. import countries as C
 from ..deps import get_jobs, get_store
 from ..jobs import JobContext, JobManager
 from ..sources.enf import gridmap, references, service
@@ -62,9 +63,22 @@ def match(case_id: str, body: MatchRequest, store: Store = Depends(get_store), j
     if jobs.active(case_id, "enf.match"):
         raise HTTPException(409, "an ENF match is already running for this case")
 
+    case = store.get_case(case_id)
+
     def work(ctx: JobContext):
         doc = service.run_match(store, case_id, body.reference_id, body.t0_utc, body.t1_utc,
                                 progress=ctx.sub(0.0, 0.99))
+        codes = case.get("countries") or []
+        if codes:   # a reference from another grid cannot confirm a recording made in these countries
+            grids = C.grids_for(codes, case.get("date"))
+            info = references.get_info(store.settings, body.reference_id)
+            if not C.grid_matches(info.grid, grids):
+                names = ", ".join(C.get(c).short_name for c in codes)
+                doc["notes"].append(f"This reference is for the {info.grid} grid, but {names} "
+                                    f"{'is' if len(codes) == 1 else 'are'} on "
+                                    f"{' / '.join(grids) or 'a grid with no built-in reference'}. "
+                                    "A match here would contradict the country you set.")
+                store.write_json(case_id, f"enf/matches/{doc['id']}.json", doc)
         store.touch(case_id)
         return {"match_id": doc["id"]}
 
@@ -88,8 +102,17 @@ def delete_match(case_id: str, match_id: str, store: Store = Depends(get_store))
 # ---- global ---------------------------------------------------------------------------------------
 
 @router.get("/api/enf/references")
-def list_references(store: Store = Depends(get_store)):
-    return references.list_references(store.settings)
+def list_references(country: list[str] = Query(default=[]), date: str | None = None,
+                    store: Store = Depends(get_store)):
+    """All references; with ``country`` (repeatable) each gets ``in_area`` (its power grid covers
+    one of those countries on ``date``), matching ones first."""
+    refs = references.list_references(store.settings)
+    if not country:
+        return refs
+    grids = C.grids_for(C.validate(country), date)
+    for r in refs:
+        r["in_area"] = C.grid_matches(r.get("grid", ""), grids)
+    return sorted(refs, key=lambda r: not r["in_area"])
 
 
 @router.post("/api/enf/references/import")

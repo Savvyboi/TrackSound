@@ -15,7 +15,9 @@ from ..physics import case_sound_speed, pad_bbox
 from ..sources.aircraft import flights as fl
 from ..sources.aircraft import search as srch
 from ..store import Store, new_id
+from .. import countries as C
 from .cases import BBox
+from .countries import require_area
 
 router = APIRouter(prefix="/api/cases/{case_id}/aircraft", tags=["aircraft"])
 
@@ -267,9 +269,9 @@ def get_flights(case_id: str, store: Store = Depends(get_store)):
 def fetch_flights(case_id: str, body: FetchBody, store: Store = Depends(get_store), jobs: JobManager = Depends(get_jobs)):
     case = store.get_case(case_id)
     date = body.date or case.get("date")
-    region = body.bbox.model_dump() if body.bbox else (pad_bbox(case["region"], 15_000.0) if case.get("region") else None)
-    if not date or not region:
-        raise HTTPException(400, "set the case date and region first (or pass date and bbox)")
+    if not date:
+        raise HTTPException(400, "set the case date first (the UTC day of the recording)")
+    region = body.bbox.model_dump() if body.bbox else pad_bbox(require_area(case, "download flights for").bbox, 15_000.0)
     if jobs.active(case_id, "aircraft.fetch"):
         raise HTTPException(409, "flights are already being fetched for this case")
     flights_dir = store.settings.flights_dir
@@ -352,14 +354,10 @@ def search_estimate(case_id: str, body: SearchBody, store: Store = Depends(get_s
     evs = _check_events(store, case_id, body.events)
     _, traces = _traces(store, case_id)
     if body.mode == "point":
-        p = body.point
-        bbox = {"lat_min": p.lat - 0.01, "lat_max": p.lat + 0.01, "lon_min": p.lon - 0.01, "lon_max": p.lon + 0.01}
-    else:
-        if not case.get("region"):
-            raise HTTPException(400, "set the case region first")
-        bbox = case["region"]
+        return srch.estimate(traces, None, body.spacing_m, "point", point=body.point.model_dump())
+    area = require_area(case, "search")
     t = _single_time(case, evs[body.events[0]], body) if body.mode == "single" else None
-    return srch.estimate(traces, bbox, body.spacing_m, body.mode, t)
+    return srch.estimate(traces, area, body.spacing_m, body.mode, t)
 
 
 @router.post("/search")
@@ -367,8 +365,7 @@ def run_search(case_id: str, body: SearchBody, store: Store = Depends(get_store)
     case = _require_spectrogram(store, case_id)
     evs = _check_events(store, case_id, body.events)
     fs, traces = _traces(store, case_id)
-    if body.mode != "point" and not case.get("region"):
-        raise HTTPException(400, "set the case region first")
+    area = None if body.mode == "point" else require_area(case, "search")
     t_single = _single_time(case, evs[body.events[0]], body) if body.mode == "single" else None
     c = case_sound_speed(case)
     sid = new_id("as")
@@ -378,13 +375,16 @@ def run_search(case_id: str, body: SearchBody, store: Store = Depends(get_store)
 
     def work(ctx: JobContext):
         notes: list[str] = [silence_note] if silence_note else []
-        inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes)
+        inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes,
+                          area=area)
+        if area is not None and area.countries:
+            notes.append(f"Only positions in {area.describe()} were searched.")
         if body.mode == "single":
-            res = srch.single_event_search(inp, evs[body.events[0]], case["region"], t_single, body.spacing_m,
+            res = srch.single_event_search(inp, evs[body.events[0]], area, t_single, body.spacing_m,
                                            body.tol_s or 30.0, progress=ctx.progress)
         else:
             res = srch.two_event_search(inp, evs[body.events[0]], evs[body.events[1]],
-                                        None if body.mode == "point" else case["region"], body.spacing_m,
+                                        area, body.spacing_m,
                                         body.point.model_dump() if body.point else None, body.tol_s or 6.0,
                                         silence, progress=ctx.progress)
         _save_search(store, case_id, sid, body.mode, None, request, res)
@@ -475,7 +475,8 @@ def refine_search(case_id: str, sid: str, body: RefineBody, store: Store = Depen
 
     def work(ctx: JobContext):
         notes: list[str] = []
-        inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes)
+        inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes,
+                          area=C.case_area(case))
         res = srch.refine(inp, parent, internal, body.rank, evs, body.extra_events, body.spacing_m, body.half_m,
                           progress=ctx.progress)
         _save_search(store, case_id, new_sid, "refine", sid, request, res, parent_margin=parent.get("margin"))

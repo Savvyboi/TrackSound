@@ -12,6 +12,7 @@ import { fmtAgo } from "../../lib/format";
 import { fmtClock } from "../../lib/tz";
 import { setTab, useWs, ws } from "../../state/workspace";
 import { useCaseData } from "../workspace/caseContext";
+import { hasSearchArea, SearchAreaBanner, TOO_LARGE_REASON, useSearchArea } from "../workspace/SearchArea";
 import { isHelicopter } from "../map/geometry";
 
 export function CategoryIcon({ category, className }: { category: string | null | undefined; className?: string }) {
@@ -35,7 +36,8 @@ export function FlightsSection() {
   const [filter, setFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
   const flightIdx = useWs((s) => s.flightIdx);
-  const ready = !!c.date && !!c.region;
+  const ready = !!c.date && hasSearchArea(c);
+  const { tooLarge } = useSearchArea();
   const set = fs.data;
 
   const flights = useMemo(() => {
@@ -81,7 +83,7 @@ export function FlightsSection() {
         <Hint>
           Set the{" "}
           <button className="font-medium text-accent hover:underline" onClick={() => setTab("setup")}>
-            date and region
+            date and the country or region
           </button>{" "}
           to fetch flights.
         </Hint>
@@ -112,8 +114,17 @@ export function FlightsSection() {
             </p>
           )}
           {stale && <div className="text-2xs text-warn">The flights were fetched for {set?.date}; the case date is now {c.date}. Fetch again.</div>}
+          <SearchAreaBanner />
           <div className="flex items-center gap-3">
-            <Button size="sm" variant={set?.status === "ready" ? "secondary" : "primary"} icon={<CloudDownload />} loading={starting} onClick={fetchDay}>
+            <Button
+              size="sm"
+              variant={set?.status === "ready" ? "secondary" : "primary"}
+              icon={<CloudDownload />}
+              loading={starting}
+              onClick={fetchDay}
+              disabled={tooLarge}
+              tip={tooLarge ? TOO_LARGE_REASON : undefined}
+            >
               {set?.status === "ready" ? "Fetch again" : `Fetch flights for ${c.date}`}
             </Button>
             <Checkbox checked={keepJets} onChange={setKeepJets} label="Keep jets" />

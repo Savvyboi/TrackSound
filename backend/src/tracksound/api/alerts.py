@@ -133,10 +133,22 @@ def _standalone_attention(doc: dict) -> list[str]:
     return out
 
 
+SAME_COUNTRIES = {"US", "PR", "GU", "VI", "AS", "MP", "UM", "CA"}   # the US and its territories; Canada's variant
+
+
+def _country_note(case: dict) -> list[str]:
+    codes = set(case.get("countries") or [])
+    if codes and not codes & SAME_COUNTRIES:
+        return ["SAME alert bursts are used in the US (and a variant in Canada); the countries set for this case "
+                "would not normally carry them, so a decoded header suggests the recording is from elsewhere or "
+                "includes a US broadcast."]
+    return []
+
+
 def view_state(case: dict, doc: dict | None) -> dict:
     """The GET /alerts response for a stored scan document (or none)."""
     if not doc:
-        return {"headers": [], "eom": [], "scanned_at": None, "notes": []}
+        return {"headers": [], "eom": [], "scanned_at": None, "notes": _country_note(case)}
     headers, notes, basis = [], [], None
     for h in sorted(doc.get("headers", []), key=lambda h: h["t"]):
         view, basis = _header_view(h, case, doc)
@@ -154,6 +166,7 @@ def view_state(case: dict, doc: dict | None) -> dict:
                      "could not be decoded reliably (too weak or masked).")
     notes.extend(_standalone_attention(doc))
     notes.extend(doc.get("notes", []))
+    notes.extend(_country_note(case))
     return {"headers": headers, "eom": [{"t": e["t"]} for e in doc.get("eom", [])], "scanned_at": doc["scanned_at"],
             "notes": notes}
 

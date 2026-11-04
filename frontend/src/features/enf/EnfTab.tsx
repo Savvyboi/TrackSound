@@ -1,10 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, Check, Clock3, Database, ExternalLink, FileUp, Globe2, Info, ListOrdered, Play, Trash2, Waves } from "lucide-react";
+import { Activity, Check, Clock3, Database, ExternalLink, FileUp, Globe2, Info, ListOrdered, Play, Trash2, TriangleAlert, Waves } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage } from "../../api/client";
 import { isActive, useStartJob } from "../../api/jobs";
 import { casePath, qk, useCaseJobs, useEnf, useEnfMatch, useEnfReferences, usePatchCase } from "../../api/queries";
-import type { EnfMatch, EnfReference } from "../../api/types";
+import type { EnfMatch, EnfReference, SearchArea } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Field, Input, Segmented, Select, Switch } from "../../components/ui/form";
 import { Badge, EmptyState, ErrorNote, Hint, KV, ProgressBar, Section, Skeleton, Stat } from "../../components/ui/misc";
@@ -15,6 +15,7 @@ import { fmtAgo, fmtDuration, fmtNum, fmtPct } from "../../lib/format";
 import { fmtDateTime, fmtUtc, fromUtcInput, toUtcInput, utcDayRange } from "../../lib/tz";
 import { toggleLayer, useWs, ws } from "../../state/workspace";
 import { caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
+import { caseCountries, SearchAreaBanner, useSearchArea } from "../workspace/SearchArea";
 
 export function EnfTab() {
   const c = useCaseData();
@@ -36,6 +37,22 @@ export function EnfTab() {
   );
 }
 
+/** References for this case: with countries, each has `in_area` and the matching ones come first. */
+function useCaseRefs() {
+  const c = useCaseData();
+  return useEnfReferences(true, caseCountries(c), c.date);
+}
+
+/** "Portugal uses 50 Hz" warnings when the hum's frequency doesn't fit the chosen countries. */
+function mainsMismatch(nominal: 50 | 60 | null, area: SearchArea | null): string | null {
+  if (!nominal || !area || !area.countries.length) return null;
+  const known = area.mains_hz.filter((m): m is 50 | 60 | "50/60" => m != null);
+  if (!known.length || known.some((m) => m === nominal || m === "50/60")) return null;
+  const other = nominal === 50 ? 60 : 50;
+  const many = area.countries.length > 1;
+  return `The hum is ${nominal} Hz but ${area.description} ${many ? "use" : "uses"} ${other} Hz: check the country or the recording.`;
+}
+
 function useEnfJob(word: string) {
   const c = useCaseData();
   return useCaseJobs(c.id).find((j) => isActive(j) && j.kind.startsWith("enf") && j.kind.includes(word));
@@ -49,6 +66,8 @@ function ExtractSection() {
   const [nominal, setNominal] = useState<"auto" | 50 | 60>("auto");
   const grid = useWs((s) => s.layers.enfGrid);
   const a = enf.data?.analysis ?? null;
+  const { area } = useSearchArea();
+  const mismatch = mainsMismatch(a?.nominal_hz ?? null, area);
   const run = async () => {
     try {
       await startJob(`${casePath(c.id)}/enf/extract`, { nominal });
@@ -93,6 +112,12 @@ function ExtractSection() {
         <Skeleton className="mt-3 h-16" />
       ) : a ? (
         <div className="mt-3 flex flex-col gap-3">
+          {mismatch && (
+            <div className="flex items-start gap-2 rounded-md border border-warn/30 bg-warn/8 px-2.5 py-2 text-xs text-fg">
+              <TriangleAlert className="mt-px size-3.5 shrink-0 text-warn" />
+              <span>{mismatch}</span>
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-2">
             <Stat label="Mains" value={a.nominal_hz ? `${a.nominal_hz} Hz` : "none"} sub={a.nominal_hz ? (a.nominal_hz === 50 ? "Europe, Asia, Africa…" : "Americas, parts of Asia") : "no hum found"} />
             <Stat label="Confidence" value={fmtPct(a.confidence)} />
@@ -150,8 +175,13 @@ function ExtractSection() {
 }
 
 function ReferencesSection() {
-  const refs = useEnfReferences();
+  const c = useCaseData();
+  const refs = useCaseRefs();
+  const { area } = useSearchArea();
   const [importing, setImporting] = useState(false);
+  const filtered = caseCountries(c).length > 0 && (refs.data ?? []).some((r) => r.in_area !== undefined);
+  const inArea = (refs.data ?? []).filter((r) => r.in_area);
+  const others = (refs.data ?? []).filter((r) => !r.in_area);
   return (
     <Section
       title="Grid references"
@@ -170,6 +200,32 @@ function ReferencesSection() {
         <EmptyState compact icon={<Database />} title="No references">
           Import a grid-frequency CSV (columns <code className="font-mono">time,frequency</code>) to match against.
         </EmptyState>
+      ) : filtered ? (
+        <div className="flex flex-col gap-1.5">
+          {inArea.length === 0 && (
+            <div className="flex items-start gap-2.5 rounded-lg border border-warn/30 bg-warn/8 px-3 py-2.5 text-xs">
+              <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warn" />
+              <div className="min-w-0 flex-1">
+                <div className="text-fg">
+                  No built-in grid-frequency reference covers {area?.description ?? caseCountries(c).join(", ")}
+                  {area?.grids.length ? ` (${area.grids.join(", ")} grid${area.grids.length > 1 ? "s" : ""})` : ""}. Import one as CSV.
+                </div>
+                <Button size="xs" variant="secondary" icon={<FileUp />} className="mt-2" onClick={() => setImporting(true)}>
+                  Import a reference CSV
+                </Button>
+              </div>
+            </div>
+          )}
+          {inArea.map((r) => (
+            <RefRow key={r.id} r={r} />
+          ))}
+          {others.length > 0 && (
+            <div className="mt-1.5 text-[10px] font-semibold tracking-wider text-fg-faint uppercase">Other grids</div>
+          )}
+          {others.map((r) => (
+            <RefRow key={r.id} r={r} other />
+          ))}
+        </div>
       ) : (
         <div className="flex flex-col gap-1.5">
           {refs.data.map((r) => (
@@ -182,12 +238,15 @@ function ReferencesSection() {
   );
 }
 
-function RefRow({ r }: { r: EnfReference }) {
+function RefRow({ r, other }: { r: EnfReference; other?: boolean }) {
   const cov = r.coverage;
   return (
-    <div className="rounded-md border border-line bg-surface-2/50 px-2.5 py-2">
-      <div className="flex items-center gap-1.5">
-        <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">{r.name}</span>
+    <div className={cn("rounded-md border border-line bg-surface-2/50 px-2.5 py-2", other && "opacity-55")}>
+      <div className="flex items-start gap-1.5">
+        <span className="line-clamp-2 min-w-0 flex-1 text-xs font-medium text-fg" title={r.name}>
+          {r.name}
+        </span>
+        {other ? <Badge>other grid</Badge> : r.in_area ? <Badge tone="ok">in area</Badge> : null}
         <Badge tone={r.nominal_hz === 50 ? "info" : "enf"}>{r.nominal_hz} Hz</Badge>
         <Badge>{r.source}</Badge>
       </div>
@@ -290,11 +349,18 @@ function ImportRefDialog({ open, onClose }: { open: boolean; onClose: () => void
 function MatchSection() {
   const c = useCaseData();
   const enf = useEnf(c.id);
-  const refs = useEnfReferences();
+  const refs = useCaseRefs();
   const startJob = useStartJob();
   const job = useEnfJob("match");
   const nominal = enf.data?.analysis?.nominal_hz ?? null;
-  const usable = useMemo(() => (refs.data ?? []).filter((r) => !nominal || r.nominal_hz === nominal), [refs.data, nominal]);
+  const usable = useMemo(
+    () =>
+      (refs.data ?? [])
+        .filter((r) => !nominal || r.nominal_hz === nominal)
+        .sort((x, y) => Number(!!y.in_area) - Number(!!x.in_area)),
+    [refs.data, nominal],
+  );
+  const filtered = caseCountries(c).length > 0 && usable.some((r) => r.in_area !== undefined);
   const [refId, setRefId] = useState("");
   useEffect(() => {
     if (!usable.find((r) => r.id === refId)) setRefId(usable[0]?.id ?? "");
@@ -341,12 +407,14 @@ function MatchSection() {
   return (
     <Section title="Match against a grid" icon={<Play />}>
       <div className="flex flex-col gap-2.5">
+        <SearchAreaBanner />
         <Field label="Reference" hint={nominal ? `Showing ${nominal} Hz grids` : undefined}>
           <Select value={refId} onChange={(e) => setRefId(e.target.value)} disabled={!usable.length}>
             {usable.length === 0 && <option value="">No matching references</option>}
             {usable.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name} · {r.grid}
+                {filtered && !r.in_area ? " (other grid)" : ""}
               </option>
             ))}
           </Select>
@@ -387,7 +455,7 @@ function MatchesSection() {
   const c = useCaseData();
   const qc = useQueryClient();
   const enf = useEnf(c.id);
-  const refs = useEnfReferences();
+  const refs = useCaseRefs();
   const matchId = useWs((s) => s.matchId);
   const matches = enf.data?.matches ?? [];
   const refName = (id: string) => refs.data?.find((r) => r.id === id)?.name ?? id;

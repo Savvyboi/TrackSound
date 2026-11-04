@@ -30,6 +30,7 @@ import { fmtClock, fmtDateTime, fmtUtc } from "../../lib/tz";
 import { focusMap, focusTime, useWs, ws } from "../../state/workspace";
 import { STATUS_COLOR } from "../timeline/TimelineCanvas";
 import { caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
+import { SearchAreaBanner, useSearchArea } from "../workspace/SearchArea";
 import { useLightningActions } from "./actions";
 import { CatalogueSection, KnownEventSection } from "./Catalogue";
 
@@ -388,7 +389,9 @@ function SolveSection() {
     flash_sync: "Flash sync: the clock comes from matching video flashes to strikes.",
     free: "Free: searches over the clock offset too (needs several good onsets).",
   }[mode];
+  const { area, tooLarge } = useSearchArea();
   const blockers: string[] = [];
+  if (tooLarge) blockers.push(`draw a region inside ${area?.description ?? "the country"}`);
   if (!st.data?.strikes?.count) blockers.push("fetch or import strikes");
   if (accOnsets === 0) blockers.push("detect or add thunder onsets");
 
@@ -413,6 +416,7 @@ function SolveSection() {
   return (
     <Section title="Solve" icon={<Play />}>
       <div className="flex flex-col gap-2.5">
+        <SearchAreaBanner />
         <Switch
           checked={useStart && c.start_utc != null}
           disabled={c.start_utc == null}

@@ -54,6 +54,7 @@ class CasePatch(BaseModel):
     date: str | None = None
     timezone: str | None = None
     region: BBox | None = None
+    countries: list[str] | None = None
     start_utc: float | None = None
     start_utc_source: Literal["user", "aircraft", "lightning", "enf", "alerts"] | None = None
     temperature_c: float | None = Field(default=None, ge=-60, le=60)
@@ -64,6 +65,14 @@ class CasePatch(BaseModel):
         if v is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
             raise ValueError("date must be YYYY-MM-DD")
         return v
+
+    @field_validator("countries")
+    @classmethod
+    def _countries(cls, v):
+        if v is None:
+            return v
+        from .. import countries as C
+        return C.validate(v)
 
     @field_validator("timezone")
     @classmethod

@@ -15,6 +15,7 @@ import { fmtClock, fmtDatePretty, tzAbbr } from "../../lib/tz";
 import { setTab } from "../../state/workspace";
 import { caseC, caseTz, useCaseData } from "./caseContext";
 import { JobsIndicator } from "./JobsIndicator";
+import { caseCountries, hasSearchArea, useSearchArea } from "./SearchArea";
 
 export function Header() {
   const c = useCaseData();
@@ -44,8 +45,8 @@ export function Header() {
       <HeaderItem icon={<CalendarDays />} label="Date (UTC)" onClick={() => setTab("setup")} empty={!c.date} className="hidden xl:flex">
         {c.date ?? "Set date"}
       </HeaderItem>
-      <HeaderItem icon={<MapPinned />} label="Search region" onClick={() => setTab("setup")} empty={!c.region} className="hidden 2xl:flex">
-        {c.region ? fmtBBoxShort(c.region) : "Set region"}
+      <HeaderItem icon={<MapPinned />} label="Search area" onClick={() => setTab("setup")} empty={!hasSearchArea(c)} className="hidden 2xl:flex">
+        <AreaLabel />
       </HeaderItem>
       <HeaderItem
         icon={<Thermometer />}
@@ -178,4 +179,12 @@ function CaseClock() {
       <SourceBadge source={c.start_utc_source} />
     </button>
   );
+}
+
+function AreaLabel() {
+  const c = useCaseData();
+  const { area } = useSearchArea();
+  const codes = caseCountries(c);
+  if (codes.length) return <>{area?.description ?? codes.join(", ")}</>;
+  return <>{c.region ? fmtBBoxShort(c.region) : "Set region"}</>;
 }

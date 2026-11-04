@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Clock3,
   CloudSun,
+  Earth,
   FileAudio,
   Globe2,
   MapPinned,
@@ -14,14 +15,15 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../api/client";
-import { usePatchCase, useWeather } from "../../api/queries";
-import type { BBox, Case, CasePatch, Weather } from "../../api/types";
+import { isUnavailable } from "../../api/client";
+import { useCountries, usePatchCase, useWeather } from "../../api/queries";
+import type { BBox, Case, CasePatch, CountrySummary, Weather } from "../../api/types";
 import { SourceBadge } from "../../components/SourceBadge";
-import { Button } from "../../components/ui/Button";
+import { Button, IconButton } from "../../components/ui/Button";
 import { ComboBox, Field, Input, NumberInput, Textarea } from "../../components/ui/form";
-import { Badge, Hint, KV, Section } from "../../components/ui/misc";
+import { Badge, ErrorNote, Hint, KV, Section, Skeleton } from "../../components/ui/misc";
 import { confirmDialog } from "../../components/ui/overlay";
 import { toast } from "../../components/ui/toast";
 import { cn } from "../../lib/cn";
@@ -33,6 +35,7 @@ import { focusMap, useWs, ws } from "../../state/workspace";
 import { MEDIA_ACCEPT, startUpload } from "../home/uploads";
 import { getMapBounds } from "../map/registry";
 import { caseTz, useCaseData } from "../workspace/caseContext";
+import { caseCountries, fmtArea, hasSearchArea, SearchAreaBanner } from "../workspace/SearchArea";
 
 export function SetupTab() {
   const c = useCaseData();
@@ -47,7 +50,10 @@ export function SetupTab() {
         <DateField c={c} save={save} />
         <TimezoneField c={c} save={save} />
       </Section>
-      <Section title="Search region" icon={<MapPinned />}>
+      <Section title="Recorded in" icon={<Earth />}>
+        <CountriesField c={c} save={save} />
+      </Section>
+      <Section title={caseCountries(c).length ? "Search region (optional)" : "Search region"} icon={<MapPinned />}>
         <RegionField c={c} save={save} />
       </Section>
       <Section title="Recording start time" icon={<Clock3 />}>
@@ -70,7 +76,7 @@ function Checklist({ c }: { c: Case }) {
   const items = [
     { ok: c.recording?.status === "ready", label: "Recording processed" },
     { ok: !!c.date, label: "Date set (needed for flight data)" },
-    { ok: !!c.region, label: "Region set (where to search)" },
+    { ok: hasSearchArea(c), label: "Country or region set (where to search)" },
   ];
   const done = items.filter((i) => i.ok).length;
   if (done === items.length) return null;
@@ -180,19 +186,23 @@ function RegionField({ c, save }: { c: Case; save: SaveFn }) {
   const big = size && size.w * size.h > 150 * 150;
   return (
     <div className="flex flex-col gap-3">
-      <p className="-mt-1 text-xs leading-relaxed text-fg-muted">Where the recording could have been made. Searches score every point inside it, so a tighter box is faster.</p>
+      <p className="-mt-1 text-xs leading-relaxed text-fg-muted">
+        {caseCountries(c).length
+          ? "Optional: narrow the search inside the country. Without a region, searches cover the whole country; a tighter box is faster."
+          : "Where the recording could have been made. Searches score every point inside it, so a tighter box is faster."}
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <Field label="North (lat max)">
-          <NumberInput value={draft.lat_max} onCommit={(v) => set("lat_max", v)} min={-90} max={90} step={0.01} digits={6} placeholder="41.10" />
+          <NumberInput value={draft.lat_max} onCommit={(v) => set("lat_max", v)} min={-90} max={90} step={0.01} digits={6} placeholder="e.g. 39.0" />
         </Field>
         <Field label="South (lat min)">
-          <NumberInput value={draft.lat_min} onCommit={(v) => set("lat_min", v)} min={-90} max={90} step={0.01} digits={6} placeholder="40.65" />
+          <NumberInput value={draft.lat_min} onCommit={(v) => set("lat_min", v)} min={-90} max={90} step={0.01} digits={6} placeholder="e.g. 38.5" />
         </Field>
         <Field label="West (lon min)">
-          <NumberInput value={draft.lon_min} onCommit={(v) => set("lon_min", v)} min={-540} max={540} step={0.01} digits={6} placeholder="-73.90" />
+          <NumberInput value={draft.lon_min} onCommit={(v) => set("lon_min", v)} min={-540} max={540} step={0.01} digits={6} placeholder="e.g. -9.6" />
         </Field>
         <Field label="East (lon max)">
-          <NumberInput value={draft.lon_max} onCommit={(v) => set("lon_max", v)} min={-540} max={540} step={0.01} digits={6} placeholder="-73.20" />
+          <NumberInput value={draft.lon_max} onCommit={(v) => set("lon_max", v)} min={-540} max={540} step={0.01} digits={6} placeholder="e.g. -8.8" />
         </Field>
       </div>
       {invalid && <div className="text-2xs text-danger">South must be below north, and west below east.</div>}
@@ -468,6 +478,87 @@ function RecordingInfo({ c }: { c: Case }) {
           e.target.value = "";
         }}
       />
+    </div>
+  );
+}
+
+/** Flag emoji from an alpha-2 code ("PT" → 🇵🇹); empty for other codes. */
+function flag(code: string): string {
+  if (!/^[A-Za-z]{2}$/.test(code)) return "";
+  return String.fromCodePoint(...[...code.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+}
+
+/** "Portugal · 50 Hz · Continental Europe grid". */
+export function countryHint(k: CountrySummary): string {
+  const parts = [k.name];
+  parts.push(k.mains_hz ? `${k.mains_hz} Hz` : "mains frequency unknown");
+  if (k.grids.length) parts.push(`${k.grids.join(", ")} grid${k.grids.length > 1 ? "s" : ""}`);
+  return parts.join(" · ");
+}
+
+function CountriesField({ c, save }: { c: Case; save: SaveFn }) {
+  const list = useCountries();
+  const selected = caseCountries(c);
+  const byCode = useMemo(() => new Map((list.data ?? []).map((k) => [k.code, k])), [list.data]);
+  const options = useMemo(() => (list.data ?? []).filter((k) => !selected.includes(k.code)).map((k) => k.code), [list.data, selected]);
+  if (list.isLoading) return <Skeleton className="h-8" />;
+  if (list.error)
+    return isUnavailable(list.error) ? (
+      <Hint>The country filter isn't available on the server you're connected to. Use the search region below.</Hint>
+    ) : (
+      <ErrorNote error={list.error} />
+    );
+  const set = (codes: string[]) => save({ countries: codes }, "the countries");
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="-mt-1 text-xs leading-relaxed text-fg-muted">Searches, downloads and mains-hum references are limited to these countries.</p>
+      {selected.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {selected.map((code) => {
+            const k = byCode.get(code);
+            return (
+              <div key={code} className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-2 px-2.5 py-2">
+                <span className="flex h-6 min-w-8 items-center justify-center rounded-md border border-line-strong bg-surface px-1 text-2xs font-semibold text-fg tnum" aria-hidden>
+                  {code}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-fg">
+                    <span className="mr-1">{flag(code)}</span>
+                    {k?.name ?? code}
+                  </div>
+                  {k && (
+                    <div className="truncate text-2xs text-fg-muted tnum" title={countryHint(k)}>
+                      {countryHint(k).split(" · ").slice(1).join(" · ")} · {fmtArea(k.area_km2)}
+                    </div>
+                  )}
+                </div>
+                <IconButton size="xs" label={`Remove ${k?.name ?? code}`} onClick={() => set(selected.filter((x) => x !== code))}>
+                  <X />
+                </IconButton>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <ComboBox
+        value={null}
+        options={options}
+        ariaLabel="Add a country"
+        placeholder={selected.length ? "Add another country…" : "Anywhere: choose a country…"}
+        onChange={(code) => set([...selected, code])}
+        searchText={(code) => `${byCode.get(code)?.name ?? ""} ${code} ${byCode.get(code)?.iso3 ?? ""}`}
+        renderOption={(code) => {
+          const k = byCode.get(code);
+          return (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="w-6 shrink-0 text-2xs font-semibold text-fg-faint tnum">{code}</span>
+              <span className="truncate text-fg">{k?.name ?? code}</span>
+              {k?.mains_hz && <span className="shrink-0 text-2xs text-fg-faint tnum">{k.mains_hz} Hz</span>}
+            </span>
+          );
+        }}
+      />
+      {selected.length > 0 && <SearchAreaBanner />}
     </div>
   );
 }

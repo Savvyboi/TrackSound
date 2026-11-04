@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 from ..deps import get_jobs, get_store
 from ..jobs import JobContext, JobManager
+from .. import countries as C
 from ..physics import case_sound_speed, pad_bbox
+from .countries import require_area
 from ..sources.lightning import catalogue, flashes as flash_mod, glm, solve as solver, state, thunder, usgs
 from ..sources.lightning.events import canonical_kind
 from ..store import Store, new_id
@@ -268,10 +270,8 @@ def fetch_strikes(case_id: str, body: StrikeFetch, store: Store = Depends(get_st
         raise HTTPException(400, "at most 31 days of USGS events per fetch")
     if body.bbox is not None:
         bbox = body.bbox.model_dump()
-    elif case.get("region"):
-        bbox = pad_bbox(case["region"], FETCH_PAD_M)
-    else:
-        raise HTTPException(400, "set the case region or pass a bbox")
+    else:   # the case's region and/or countries, padded by the audible range
+        bbox = pad_bbox(require_area(case, "download events for").bbox, FETCH_PAD_M)
     if body.source == "glm":
         sats = glm.satellites_for(bbox, body.t0_utc, body.t1_utc, body.satellite)   # ValueError -> 400
     else:
@@ -379,10 +379,17 @@ def solve(case_id: str, body: SolveBody | None = None, store: Store = Depends(ge
         onsets = state.read_onsets(store, case_id)
         fl = state.read_flashes(store, case_id)
         _, strikes = state.read_strikes(store, case_id)
-        result = solver.solve(onsets, fl, strikes, c=case_sound_speed(c), duration_s=duration, region=c.get("region"),
+        area = C.case_area(c)
+        if area is not None and area.too_large():
+            raise ValueError(f"{area.describe()} is too large to search as a whole: draw a region inside it")
+        result = solver.solve(onsets, fl, strikes, c=case_sound_speed(c), duration_s=duration,
+                              region=area.bbox if area is not None else None,
                               date=c.get("date"), start_utc=start, start_tol_s=body.start_tol_s,
                               use_flashes=body.use_flashes, spacing_m=body.spacing_m, max_range_km=body.max_range_km,
-                              progress=ctx.progress)
+                              progress=ctx.progress,
+                              mask_fn=area.contains if area is not None and area.countries else None)
+        if area is not None and area.countries:
+            result.setdefault("notes", []).append(f"Only listener positions in {area.describe()} were searched.")
         doc = {"id": new_id("ls"), "created_at": time.time(), "request": request, **result}
         state.save_solve(store, case_id, doc)
         store.touch(case_id)

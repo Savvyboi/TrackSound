@@ -14,7 +14,7 @@ import { Crosshair, Layers as LayersIcon, Map as MapIcon, SquareDashed, WifiOff,
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { errorMessage } from "../../api/client";
-import { useAlerts, usePatchCase, useEnf, useFlightSet, useFlightsGeo, useGridMap, useLightning, useSearch, useSolve, useStrikes } from "../../api/queries";
+import { useAlerts, useArea, useCountries, useCountryOutlines, usePatchCase, useEnf, useFlightSet, useFlightsGeo, useGridMap, useLightning, useSearch, useSolve, useStrikes } from "../../api/queries";
 import type { BBox, FlightsGeoJSON } from "../../api/types";
 import { Button, IconButton } from "../../components/ui/Button";
 import { Switch } from "../../components/ui/form";
@@ -23,7 +23,7 @@ import { toast } from "../../components/ui/toast";
 import { cn } from "../../lib/cn";
 import { colormapGradient } from "../../lib/colormap";
 import { fmtCoord } from "../../lib/format";
-import { bboxPolygon, normalizeBBox, validBBox } from "../../lib/geo";
+import { bboxAround, bboxPolygon, normalizeBBox, validBBox } from "../../lib/geo";
 import { loadPref, savePref } from "../../lib/store";
 import { useTheme } from "../../lib/theme";
 import { fmtClock, fmtDateIso } from "../../lib/tz";
@@ -91,6 +91,23 @@ export function MapPanel() {
   const alerts = useAlerts(c.id, tab === "alerts");
   const alertId = useWs((s) => s.alertId);
 
+  // the "recorded in" countries: outlines, and the search area they make
+  const countryCodes = c.countries ?? [];
+  const outlines = useCountryOutlines(countryCodes);
+  const outlineKey = outlines.map((q) => (q.data ? q.data.properties.code : "-")).join(",");
+  const countriesFC = useMemo(
+    () => ({ type: "FeatureCollection" as const, features: outlines.map((q) => q.data).filter((f): f is NonNullable<typeof f> => !!f) }) as unknown as OverlayData["countries"],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [outlineKey],
+  );
+  const area = useArea(c);
+  const countryList = useCountries(countryCodes.length > 0);
+  const countryLand = useMemo(() => {
+    const byCode = new Map((countryList.data ?? []).map((k) => [k.code, k.area_km2]));
+    return countryCodes.reduce((a, code) => a + (byCode.get(code) ?? 0), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [countryList.data, countryCodes.join(",")]);
+
   // flights with a helicopter flag (category comes from the flight set, not the GeoJSON)
   const flightsFC = useMemo(() => {
     const cats = new Map((flightSet.data?.flights ?? []).map((f) => [f.idx, f.category]));
@@ -123,6 +140,7 @@ export function MapPanel() {
       enfNominal: enf.data?.analysis?.nominal_hz ?? null,
       region: c.region && validBBox(c.region) ? { type: "FeatureCollection", features: [bboxPolygon(c.region)] } : EMPTY,
       regionDraft: EMPTY,
+      countries: countriesFC,
       aHeat: aHeatImg,
       flights: (flightsFC as unknown as OverlayData["flights"]) ?? EMPTY,
       flightsAttribution: haveFlights && layers.flights ? flightSet.data?.attribution || "Flights: adsb.lol (ODbL)" : "",
@@ -148,7 +166,7 @@ export function MapPanel() {
         hoverAc: layers.flights,
       },
     };
-  }, [dark, effective, gridMap.data, enf.data, c, search.data, flightsFC, flightSet.data, haveFlights, cand, flightIdx, solve.data, strikes.data, layers, aHeatImg, lHeatImg]);
+  }, [dark, effective, gridMap.data, enf.data, c, search.data, flightsFC, flightSet.data, haveFlights, cand, flightIdx, solve.data, strikes.data, layers, aHeatImg, lHeatImg, countriesFC]);
 
   const overlayRef = useRef(overlay);
   overlayRef.current = overlay;
@@ -253,6 +271,46 @@ export function MapPanel() {
       console.warn("overlay sync failed", e);
     }
   }, [overlay, styleGen]);
+
+  // fit the map to the search area when the countries change (and once on open, when only countries are set)
+  const fittedArea = useRef<string | null>(null);
+  const countriesKey = countryCodes.join(",");
+  useEffect(() => {
+    const map = mapRef.current;
+    const b = area.data?.bbox;
+    if (!map || !b || area.isPlaceholderData || !validBBox(b)) return;
+    const first = fittedArea.current === null;
+    if (fittedArea.current === countriesKey) return;
+    fittedArea.current = countriesKey;
+    if (first && (!countriesKey || c.region)) return; // the region was already fitted on open
+    // islands can make the bbox far larger than the country (Portugal + Azores): then go to the
+    // representative point at a zoom that shows the land area instead
+    // bbox span from degrees (haversine would take the short way round across the antimeridian)
+    const latC = ((b.lat_min + b.lat_max) / 2) * (Math.PI / 180);
+    const bboxKm2 = (b.lon_max - b.lon_min) * 111.32 * Math.cos(latC) * (b.lat_max - b.lat_min) * 110.57;
+    const land = area.data!.area_km2 > 0 ? area.data!.area_km2 : countryLand;
+    const ctr = area.data!.center;
+    if (ctr && land > 0 && bboxKm2 > land * 6) {
+      // a box around the main landmass, sized from the land area (MapLibre fits it to the real container)
+      const box = bboxAround(ctr.lat, ctr.lon, Math.sqrt(land) * 0.9);
+      map.fitBounds(
+        [
+          [box.lon_min, box.lat_min],
+          [box.lon_max, box.lat_max],
+        ],
+        { padding: 20, maxZoom: 12, duration: first ? 0 : 800 },
+      );
+      return;
+    }
+    map.fitBounds(
+      [
+        [b.lon_min, b.lat_min],
+        [b.lon_max, b.lat_max],
+      ],
+      { padding: 40, maxZoom: 13, duration: first ? 0 : 700 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area.data, area.isPlaceholderData, countriesKey, countryLand]);
 
   // focus requests (summary "zoom to", candidate selection, ...)
   useEffect(() => {
@@ -535,7 +593,13 @@ export function MapPanel() {
           </button>
         </div>
       )}
-      <Legend overlay={overlay} hasSearchHeat={!!search.data?.heat?.length} hasSolve={!!solve.data?.heat?.length} esri={effective === "satellite"} />
+      <Legend
+        overlay={overlay}
+        hasSearchHeat={!!search.data?.heat?.length}
+        hasSolve={!!solve.data?.heat?.length}
+        esri={effective === "satellite"}
+        areaLabel={countryCodes.length ? (area.data?.description ?? countryCodes.join(", ")) : null}
+      />
       {clickAt && mapRef.current && (
         <ClickPopup map={mapRef.current} at={clickAt} onClose={() => setClickAt(null)}>
           <div className="w-[220px]">
@@ -571,7 +635,7 @@ function MapToolbar({ basemap, setBasemap, effective, hasGrid }: { basemap: Base
   const bp = usePopover();
   const flightsDuringOnly = useWs((s) => s.flightsDuringOnly);
   const L: { k: keyof Layers; label: string; hint?: string }[] = [
-    { k: "region", label: "Search region" },
+    { k: "region", label: "Search area", hint: "The region and the countries the recording is from" },
     { k: "flights", label: "Flights (ADS-B)", hint: "Prop and unknown-type tracks for the case date" },
     { k: "aircraftHeat", label: "Aircraft search heat", hint: "Score at every grid point of the selected search" },
     { k: "candidates", label: "Aircraft candidates", hint: "Ranked best points and the flights they heard" },
@@ -644,9 +708,30 @@ function MapToolbar({ basemap, setBasemap, effective, hasGrid }: { basemap: Base
 
 // ---- legend ----------------------------------------------------------------------------------
 
-function Legend({ overlay, hasSearchHeat, hasSolve, esri }: { overlay: OverlayData; hasSearchHeat: boolean; hasSolve: boolean; esri: boolean }) {
+function Legend({
+  overlay,
+  hasSearchHeat,
+  hasSolve,
+  esri,
+  areaLabel,
+}: {
+  overlay: OverlayData;
+  hasSearchHeat: boolean;
+  hasSolve: boolean;
+  esri: boolean;
+  areaLabel: string | null;
+}) {
   const rows: ReactNode[] = [];
   const v = overlay.vis;
+  if (v.region && areaLabel) {
+    rows.push(
+      <div key="area" className="flex items-center gap-2">
+        <span className="w-[54px] text-fg-muted">Area</span>
+        <span className="h-2.5 w-4 rounded-[2px] border border-dashed border-fg/80 bg-fg/5" />
+        <span className="max-w-[180px] truncate text-fg-faint">{areaLabel}</span>
+      </div>,
+    );
+  }
   if ((v.aHeat && hasSearchHeat) || (v.lSolve && hasSolve)) {
     rows.push(
       <div key="heat" className="flex items-center gap-2">

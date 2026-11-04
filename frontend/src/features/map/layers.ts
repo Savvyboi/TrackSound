@@ -10,6 +10,8 @@ export type OverlayData = {
   enfNominal: 50 | 60 | null;
   region: FeatureCollection;
   regionDraft: FeatureCollection;
+  /** outlines of the case's countries (the "recorded in" filter) */
+  countries: FeatureCollection;
   aHeat: HeatImage | null;
   flights: FeatureCollection;
   flightsAttribution: string;
@@ -39,6 +41,7 @@ export type OverlayData = {
 type SourceKey =
   | "land"
   | "enfGrid"
+  | "countries"
   | "region"
   | "regionDraft"
   | "flights"
@@ -50,7 +53,7 @@ type SourceKey =
   | "lUnc"
   | "hoverAc";
 
-const SOURCES: SourceKey[] = ["land", "enfGrid", "region", "regionDraft", "flights", "ranges", "lMatch", "strikes", "candLinks", "candCpa", "lUnc", "hoverAc"];
+const SOURCES: SourceKey[] = ["land", "enfGrid", "countries", "region", "regionDraft", "flights", "ranges", "lMatch", "strikes", "candLinks", "candCpa", "lUnc", "hoverAc"];
 const IMAGE_SOURCES = ["aHeat", "lHeat"] as const;
 const BLANK_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
 const BLANK_COORDS: HeatImage["coordinates"] = [
@@ -89,6 +92,22 @@ const LAYERS: Layer[] = [
     id: "ts-enf-line",
     group: "enfGrid",
     spec: () => ({ id: "ts-enf-line", type: "line", source: sid("enfGrid"), paint: { "line-color": "#000", "line-opacity": 0.25, "line-width": 0.5 } }),
+  },
+  {
+    id: "ts-countries-fill",
+    group: "region",
+    spec: (d) => ({ id: "ts-countries-fill", type: "fill", source: sid("countries"), paint: { "fill-color": d.dark ? "#e2e8f0" : "#334155", "fill-opacity": 0.05 } }),
+  },
+  {
+    id: "ts-countries-line",
+    group: "region",
+    spec: (d) => ({
+      id: "ts-countries-line",
+      type: "line",
+      source: sid("countries"),
+      layout: { "line-join": "round" },
+      paint: { "line-color": d.dark ? "#e2e8f0" : "#334155", "line-opacity": 0.85, "line-width": 1.6, "line-dasharray": [3, 2] },
+    }),
   },
   {
     id: "ts-region-fill",
@@ -391,6 +410,8 @@ export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
   setProp(map, st, "ts-land-fill", "paint", "fill-color", d.dark ? "#151b24" : "#f8fafc");
   setProp(map, st, "ts-land-line", "paint", "line-color", d.dark ? "#2c3542" : "#cbd5e1");
   setProp(map, st, "ts-lmatch", "paint", "line-color", d.dark ? "#ffffff" : "#0f172a");
+  setProp(map, st, "ts-countries-line", "paint", "line-color", d.dark ? "#e2e8f0" : "#334155");
+  setProp(map, st, "ts-countries-fill", "paint", "fill-color", d.dark ? "#e2e8f0" : "#334155");
   const cand = d.dark ? "#67e8f9" : "#0891b2";
   setProp(map, st, "ts-flights-hl", "paint", "line-color", cand);
   setProp(map, st, "ts-cand-links", "paint", "line-color", cand);

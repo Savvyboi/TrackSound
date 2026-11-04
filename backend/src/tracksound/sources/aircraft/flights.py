@@ -170,9 +170,9 @@ def iter_tar_traces_parallel(fileobj, box, progress=None, workers: int | None = 
     if workers == 1:
         yield from iter_tar_traces(fileobj, box, progress)
         return
-    import multiprocessing as mp
-    # forkserver, not fork: forking a multi-threaded server (or test runner) can deadlock a child
-    ex = ProcessPoolExecutor(workers, mp_context=mp.get_context("forkserver"))
+    from ...procs import mp_context
+    # forkserver (spawn on Windows), not fork: forking a multi-threaded server can deadlock a child
+    ex = ProcessPoolExecutor(workers, mp_context=mp_context())
     pending: deque = deque()
     batch: list[tuple[str, bytes]] = []
     n_seen = 0

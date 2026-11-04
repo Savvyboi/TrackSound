@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="description" content="TrackSound: estimate where and when a recording was made" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>TrackSound</title>
+    <script>
+      // apply the saved theme before first paint (no flash of the wrong theme)
+      try {
+        var t = localStorage.getItem("ts.theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="/assets/index-C2dV6aVT.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C0aghakl.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

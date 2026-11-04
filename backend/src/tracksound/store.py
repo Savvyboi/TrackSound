@@ -64,7 +64,8 @@ def _json_default(o):
     raise TypeError(f"not JSON serialisable: {type(o).__name__}")
 
 
-CASE_FIELDS_EDITABLE = {"name", "notes", "date", "timezone", "region", "start_utc", "start_utc_source", "temperature_c"}
+CASE_FIELDS_EDITABLE = {"name", "notes", "date", "timezone", "region", "countries", "start_utc", "start_utc_source",
+                        "temperature_c"}
 
 
 class Store:
@@ -143,7 +144,7 @@ class Store:
         now = time.time()
         case = {
             "id": cid, "name": name.strip() or "Untitled case", "created_at": now, "updated_at": now, "notes": "",
-            "date": None, "timezone": None, "region": None,
+            "date": None, "timezone": None, "region": None, "countries": [],
             "start_utc": None, "start_utc_source": None, "temperature_c": None,
             "recording": None,
         }
@@ -155,6 +156,7 @@ class Store:
         case = self.read_json(case_id, "case.json") if self.case_dir(case_id).exists() else None
         if case is None:
             raise NotFound(case_id)
+        case.setdefault("countries", [])          # cases from before the country filter
         return case
 
     def update_case(self, case_id: str, **fields) -> dict:

@@ -43,10 +43,11 @@ def case_weather(case_id: str, store: Store = Depends(get_store)):
     """Hourly 2 m temperature at the region centre on the case date, and a suggested value
     (at the recording start if known, else the day's mean)."""
     case = store.get_case(case_id)
-    if not case.get("date") or not case.get("region"):
-        raise HTTPException(400, "set the case date and region first")
-    reg = case["region"]
-    lat, lon = (reg["lat_min"] + reg["lat_max"]) / 2, (reg["lon_min"] + reg["lon_max"]) / 2
+    from .. import countries as C
+    area = C.case_area(case)
+    if not case.get("date") or area is None or area.bbox is None:
+        raise HTTPException(400, "set the case date and a region or country first")
+    lat, lon = area.center()
     errors = []
     hourly = []
     for name, url in (("archive", ARCHIVE), ("forecast", FORECAST)):

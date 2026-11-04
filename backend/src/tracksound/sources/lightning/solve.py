@@ -69,8 +69,10 @@ def _iso(t: float) -> str:
 class _Search:
     """Coarse-to-fine search over (x, T) for one problem."""
 
-    def __init__(self, prob: Problem, region: dict, spacing_m: float, mode: str, progress: ProgressFn):
+    def __init__(self, prob: Problem, region: dict, spacing_m: float, mode: str, progress: ProgressFn,
+                 mask_fn: Callable | None = None):
         self.p, self.region, self.spacing, self.mode, self.progress = prob, region, spacing_m, mode, progress
+        self.mask_fn = mask_fn          # (lat, lon) -> bool: where the listener may be (the case's countries)
         ew, ns = bbox_size_m(region)
         self.spacing_c = max(spacing_m, math.sqrt(max(ew * ns, 1.0) / COARSE_POINTS[mode]))
         self.heat: list[tuple[np.ndarray, np.ndarray, np.ndarray, float]] = []   # (y, u, score, cell size m)
@@ -112,9 +114,26 @@ class _Search:
         best["score"][~np.isfinite(best["score"])] = 0.0
         return best
 
+    def masked(self, gy, gu):
+        """Keep only grid points inside the case's countries (if any were chosen)."""
+        if self.mask_fn is None or len(gy) == 0:
+            return gy, gu
+        lat, lon = self.p.frame.to_latlon(gy, gu)
+        keep = np.asarray(self.mask_fn(lat, lon), bool)
+        return gy[keep], gu[keep]
+
+    def inside(self, y: float, u: float) -> bool:
+        if self.mask_fn is None:
+            return True
+        lat, lon = self.p.frame.to_latlon(np.array([y]), np.array([u]))
+        return bool(np.asarray(self.mask_fn(lat, lon), bool)[0])
+
     def coarse(self, intervals, n_peaks: int, bonus=None):
         frame = self.p.frame
         gy, gu, _, _ = grid_points(self.region, self.spacing_c, frame)
+        gy, gu = self.masked(gy, gu)
+        if len(gy) == 0:
+            raise ValueError("the search area has no points inside the selected countries")
         res = self.scan(gy, gu, intervals, self.spacing_c, n_peaks, bonus, progress=(0.05, 0.4))
         self.heat.append((gy, gu, res["score"], self.spacing_c))
         return gy, gu, res
@@ -140,6 +159,9 @@ class _Search:
         box = square_bbox(float(lat), float(lon), half)
         spacing = max(self.spacing, 2 * half / FINE_SIDE)
         gy, gu, _, _ = grid_points(box, spacing, frame)
+        my, mu = self.masked(gy, gu)
+        if len(my):                                  # near a border: refine only the country side
+            gy, gu = my, mu
         w = max(3 * self.sig_grid(self.spacing_c) + 2 * self.bin_w(self.sig_grid(self.spacing_c), 1e9), 1.0)
         lo, hi = max(interval[0], peak["T"] - w), min(interval[1], peak["T"] + w)
         if hi <= lo:
@@ -170,6 +192,8 @@ class _Search:
             y, u, T, cov = y2, u2, float(np.clip(T2, *interval)), cov2
         ps = self.p.evaluate(np.array([y]), np.array([u]), np.array([T]), 0.0)
         s = float(ps.score[0]) + r.get("bonus", 0.0)
+        if cov is not None and not self.inside(y, u):
+            cov = None                               # the polish left the selected countries: keep the grid point
         if cov is not None and s >= s0 - max(POLISH_DROP_ABS, POLISH_DROP_REL * abs(s0)):
             return {**r, "y": y, "u": u, "T": T, "score": s, "n": int(ps.n_matched[0]), "cov": cov}
         if cov is None and T_prior is not None:
@@ -218,7 +242,7 @@ def _uncertainty(r: dict, spacing: float, frame, mean_alt: float = 0.0) -> float
 def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: float, duration_s: float,
           region: dict | None, date: str | None = None, start_utc: float | None = None, start_tol_s: float = 5.0,
           use_flashes: bool = True, spacing_m: float = 250.0, max_range_km: float = 25.0,
-          progress: ProgressFn | None = None) -> dict:
+          progress: ProgressFn | None = None, mask_fn: Callable | None = None) -> dict:
     """Run a solve; returns the LightningSolve body (mode, best, candidates, heat, matches,
     flash_matches, ranges, notes). Raises ValueError for unusable input."""
     report = progress or (lambda f, m=None: None)
@@ -243,7 +267,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     prob = Problem([o["t"] for o in used], [o.get("sigma_s") or 0.3 for o in used], [o["id"] for o in used],
                    sa, c, duration_s, frame, R, MISS_WEIGHT_MANUAL if manual_only else MISS_WEIGHT)
     prob.on_block = _throttled(lambda: report(None, None))    # lets a job be cancelled mid-pass
-    search = _Search(prob, region, spacing_m, mode, report)
+    search = _Search(prob, region, spacing_m, mode, report, mask_fn)
 
     # ---- clock intervals for the mode ----
     T_prior = None
@@ -267,7 +291,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
             bonus = [FLASH_WEIGHT * x["count"] for x in cands]
             sync_sigma = [x["sigma"] for x in cands]
             notes.append(sync_info["note"])
-            search = _Search(prob, region, spacing_m, "flash_sync", report)
+            search = _Search(prob, region, spacing_m, "flash_sync", report, mask_fn)
     if mode == "free":
         lo, hi = float(sa.t.min()) - duration_s - 10.0, float(sa.t.max()) + prob.tt_max + 10.0
         if date:
@@ -276,7 +300,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
         if hi <= lo:
             raise ValueError("no catalogued events on the case date: check the date or the catalogue")
         intervals = [(lo, hi)]
-        search = _Search(prob, region, spacing_m, "free", report)
+        search = _Search(prob, region, spacing_m, "free", report, mask_fn)
         notes.append("The recording clock was searched together with the position (no start time or accepted "
                      "flashes); this needs at least 3 well-matched onsets.")
 

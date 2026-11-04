@@ -15,6 +15,7 @@ import { fmtAgo, fmtDist, fmtDuration, fmtInt } from "../../lib/format";
 import { fmtClock, fmtDateIso, fmtUtc, fromUtcInput, toUtcInput, utcDayRange } from "../../lib/tz";
 import { focusMap, useWs, ws } from "../../state/workspace";
 import { caseDuration, useCaseData } from "../workspace/caseContext";
+import { SearchAreaBanner, TOO_LARGE_REASON, useSearchArea } from "../workspace/SearchArea";
 import { EventGlyph } from "./EventGlyph";
 import { MANUAL_KINDS, USGS_TYPES, eventIcon } from "./kinds";
 
@@ -62,6 +63,7 @@ export function CatalogueSection() {
   const invalid = span != null && (span <= 0 || span > limit);
   const file = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const { tooLarge } = useSearchArea();
 
   const fetchCatalogue = async () => {
     if (a == null || b == null || src === "csv") return;
@@ -158,6 +160,7 @@ export function CatalogueSection() {
         </div>
       ) : (
         <div className="mb-3 flex flex-col gap-2.5">
+          {src !== "csv" && <SearchAreaBanner />}
           <Segmented<Src>
             className="flex w-full"
             value={src}
@@ -234,7 +237,8 @@ export function CatalogueSection() {
                 variant={set ? "secondary" : "primary"}
                 icon={<CloudDownload />}
                 className="self-start"
-                disabled={a == null || b == null || invalid || (src === "usgs" && types.length === 0)}
+                disabled={a == null || b == null || invalid || (src === "usgs" && types.length === 0) || tooLarge}
+                tip={tooLarge ? TOO_LARGE_REASON : undefined}
                 onClick={fetchCatalogue}
               >
                 {src === "glm" ? "Fetch GOES GLM" : "Fetch USGS events"}

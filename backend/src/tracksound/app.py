@@ -16,7 +16,8 @@ from .store import NotFound, Store
 
 
 def web_dir() -> Path | None:
-    """The built frontend: $TRACKSOUND_WEB, a packaged copy, or frontend/dist in a checkout."""
+    """The built web UI: $TRACKSOUND_WEB, or tracksound/web (where `npm run build` writes it, and
+    what the wheel and the standalone apps ship), or an old-style frontend/dist checkout."""
     candidates = []
     if os.environ.get("TRACKSOUND_WEB"):
         candidates.append(Path(os.environ["TRACKSOUND_WEB"]))
@@ -30,14 +31,9 @@ def web_dir() -> Path | None:
 
 
 def _safe_process_start():
-    """Jobs run in threads and some (flyover detection) start worker processes. Forking a
-    multi-threaded server can deadlock, so start workers from a clean server process instead."""
-    import multiprocessing as mp
-    if mp.get_start_method(allow_none=True) is None:
-        try:
-            mp.set_start_method("forkserver")
-        except (RuntimeError, ValueError):
-            pass
+    """Jobs run in threads and some (flyover detection) start worker processes; see procs.py."""
+    from .procs import set_default_start_method
+    set_default_start_method()
 
 
 def create_app(settings: Settings | None = None, job_workers: int = 3) -> FastAPI:
@@ -51,7 +47,8 @@ def create_app(settings: Settings | None = None, job_workers: int = 3) -> FastAP
         yield
         jobs.shutdown()
 
-    app = FastAPI(title="TrackSound", version="0.1.0", lifespan=lifespan,
+    from . import __version__
+    app = FastAPI(title="TrackSound", version=__version__, lifespan=lifespan,
                   docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.state.settings = settings
     app.state.store = store
@@ -70,9 +67,9 @@ def create_app(settings: Settings | None = None, job_workers: int = 3) -> FastAP
     async def _bad_value(request: Request, exc: ValueError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
 
-    from .api import aircraft, alerts, cases, enf, jobs as jobs_api, lightning, report, weather
-    for r in (cases.router, jobs_api.router, aircraft.router, lightning.router, enf.router, alerts.router,
-              report.router, weather.router):
+    from .api import aircraft, alerts, cases, countries, enf, jobs as jobs_api, lightning, report, weather
+    for r in (cases.router, jobs_api.router, countries.router, aircraft.router, lightning.router, enf.router,
+              alerts.router, report.router, weather.router):
         app.include_router(r)
 
     web = web_dir()

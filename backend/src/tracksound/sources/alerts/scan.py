@@ -17,6 +17,7 @@ from typing import Callable, Iterator
 import numpy as np
 
 from . import attention, header, same
+from ... import media
 
 STEP_S = 30.0
 PRE_S = 0.5
@@ -42,7 +43,7 @@ def ffmpeg_reader(path: str | Path, fs: int = same.FS):
     """Start ffmpeg decoding ``path`` to mono float32 at ``fs``.
 
     Returns (process, read(n) -> up to n samples, stderr file)."""
-    cmd = ["ffmpeg", "-v", "error", "-nostdin", "-i", str(path), "-vn", "-ac", "1", "-ar", str(fs),
+    cmd = [media.ffmpeg_exe(), "-v", "error", "-nostdin", "-i", str(path), "-vn", "-ac", "1", "-ar", str(fs),
            "-f", "f32le", "-acodec", "pcm_f32le", "-"]
     # stderr goes to a file: a full stderr pipe would stall ffmpeg while we wait on stdout
     errfile = tempfile.TemporaryFile()

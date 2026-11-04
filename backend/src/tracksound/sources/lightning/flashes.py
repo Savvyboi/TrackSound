@@ -22,6 +22,7 @@ from typing import Callable
 
 import numpy as np
 from scipy import ndimage
+from ... import media
 
 ProgressFn = Callable[[float, str | None], None]
 
@@ -43,11 +44,10 @@ def stream_offset(path: str | Path) -> float:
     ffmpeg shifts all streams so the earliest starts at 0; the decoded audio (recording
     time 0) begins at the audio stream's own start, which can be a little later.
     """
-    cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(path)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
+    try:
+        info = media.probe(path)          # without ffprobe, stream start times are unknown: offset 0
+    except (ValueError, OSError, subprocess.SubprocessError):
         return 0.0
-    info = json.loads(r.stdout or "{}")
     starts = {}
     for s in info.get("streams", []):
         try:
@@ -64,7 +64,7 @@ def luma_trace(path: str | Path, duration_s: float | None = None, progress: Prog
                cancelled: Callable[[], bool] | None = None) -> LumaTrace:
     """Per-frame luma statistics of the first video stream (streamed from ffmpeg)."""
     vf = "scale=64:-2,signalstats,metadata=mode=print:file=-"
-    cmd = ["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-map", "0:v:0", "-vf", vf, "-an", "-f", "null", "-"]
+    cmd = [media.ffmpeg_exe(), "-nostdin", "-v", "error", "-i", str(path), "-map", "0:v:0", "-vf", vf, "-an", "-f", "null", "-"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1 << 16)
     err_chunks: list[str] = []
     t_err = threading.Thread(target=lambda: err_chunks.append(proc.stderr.read()), daemon=True)

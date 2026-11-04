@@ -344,6 +344,8 @@ export function ComboBox({
   placeholder,
   className,
   renderOption,
+  searchText,
+  ariaLabel,
 }: {
   value: string | null;
   options: string[];
@@ -351,6 +353,9 @@ export function ComboBox({
   placeholder?: string;
   className?: string;
   renderOption?: (o: string) => ReactNode;
+  /** text an option is searched by (default: the option itself, with spaces as underscores) */
+  searchText?: (o: string) => string;
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -361,10 +366,15 @@ export function ComboBox({
   const id = useId();
 
   const filtered = useMemo(() => {
+    if (searchText) {
+      const s = q.trim().toLowerCase();
+      if (!s) return options;
+      return options.filter((o) => searchText(o).toLowerCase().includes(s));
+    }
     const s = q.trim().toLowerCase().replace(/\s+/g, "_");
     if (!s) return options;
     return options.filter((o) => o.toLowerCase().includes(s));
-  }, [q, options]);
+  }, [q, options, searchText]);
 
   useEffect(() => {
     if (!open) return;
@@ -404,6 +414,7 @@ export function ComboBox({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={id}
+        aria-label={ariaLabel}
         onClick={() => setOpen((v) => !v)}
         className={cn(inputBase, "flex items-center justify-between gap-2 text-left", className)}
       >

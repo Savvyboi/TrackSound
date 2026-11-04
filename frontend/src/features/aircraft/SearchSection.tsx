@@ -6,7 +6,7 @@ import { casePath, useAircraftEvents, useCaseJobs, useFlightSet } from "../../ap
 import type { AircraftSearchRequest, SearchEstimate } from "../../api/types";
 import { Button } from "../../components/ui/Button";
 import { Field, Input, NumberInput, Segmented, Switch } from "../../components/ui/form";
-import { Hint, ProgressBar, Section, Spinner } from "../../components/ui/misc";
+import { ErrorNote, Hint, ProgressBar, Section, Spinner } from "../../components/ui/misc";
 import { toast } from "../../components/ui/toast";
 import { cn } from "../../lib/cn";
 import { fmtCoord, fmtDuration, fmtEstimate, fmtInt, fmtRec } from "../../lib/format";
@@ -14,6 +14,7 @@ import { useDebounced } from "../../lib/hooks";
 import { fromUtcInput, toUtcInput } from "../../lib/tz";
 import { focusMap, setTab, useWs, ws } from "../../state/workspace";
 import { useCaseData } from "../workspace/caseContext";
+import { hasSearchArea, SearchAreaBanner, TOO_LARGE_REASON, useSearchArea } from "../workspace/SearchArea";
 import { eventNumbers, strongBetween, suggestPair } from "./actions";
 
 const MODES = [
@@ -33,6 +34,8 @@ export function SearchSection() {
   const jobs = useCaseJobs(c.id);
   const running = jobs.find((j) => isActive(j) && j.kind.startsWith("aircraft") && (j.kind.includes("search") || j.kind.includes("refine")));
   const startJob = useStartJob();
+  const { area, tooLarge } = useSearchArea();
+  const [runError, setRunError] = useState<unknown>(null);
   const [spacing, setSpacing] = useState(200);
   const [tol, setTol] = useState<number | null>(null);
   const [silence, setSilence] = useState(true);
@@ -74,8 +77,10 @@ export function SearchSection() {
 
   const debounced = useDebounced(request, 400);
   const [est, setEst] = useState<{ data?: SearchEstimate; error?: unknown; loading: boolean }>({ loading: false });
+  const areaOk = hasSearchArea(c) && !tooLarge;
+  const areaKey = `${(c.countries ?? []).join(",")}|${JSON.stringify(c.region)}`;
   useEffect(() => {
-    if (!debounced || !c.region || flights.data?.status !== "ready") {
+    if (!debounced || !areaOk || flights.data?.status !== "ready") {
       setEst({ loading: false });
       return;
     }
@@ -88,11 +93,12 @@ export function SearchSection() {
     return () => {
       alive = false;
     };
-  }, [debounced, c.id, c.region, flights.data?.status]);
+  }, [debounced, c.id, areaOk, areaKey, flights.data?.status]);
 
   const run = async () => {
     if (!request) return;
     setStarting(true);
+    setRunError(null);
     try {
       await startJob(`${casePath(c.id)}/aircraft/search`, request, {
         success: () => "Results are ready",
@@ -102,14 +108,18 @@ export function SearchSection() {
         },
       });
     } catch (e) {
+      // e.g. 400 "over 2,000,000 grid points": shown inline next to the button
+      setRunError(e);
       toast({ tone: "error", title: "Could not start the search", body: errorMessage(e) });
     } finally {
       setStarting(false);
     }
   };
+  useEffect(() => setRunError(null), [request]);
 
   const blockers: string[] = [];
-  if (!c.region) blockers.push("set a search region");
+  if (!hasSearchArea(c)) blockers.push("set the country or a search region");
+  if (tooLarge) blockers.push(`draw a region inside ${area?.description ?? "the country"}`);
   if (flights.data?.status !== "ready") blockers.push("fetch the flights");
   if (evs.length < needed) blockers.push(needed === 1 ? "tick one flyover" : `tick two flyovers (${chosen.length} ticked)`);
   if (mode === "point" && !pickPoint) blockers.push("choose the point on the map");
@@ -117,6 +127,7 @@ export function SearchSection() {
 
   return (
     <Section title="Search" icon={<Target />} id="aircraft-search">
+      <SearchAreaBanner className="mb-3" />
       <Segmented className="mb-3 flex w-full" value={mode} onChange={(m) => ws.set({ searchMode: m })} options={MODES} ariaLabel="Search mode" />
       <p className="-mt-1 mb-3 text-xs leading-relaxed text-fg-muted">{MODES.find((m) => m.value === mode)!.tip}.</p>
 
@@ -231,15 +242,29 @@ export function SearchSection() {
               )}
             </div>
           )}
-          {est.data && est.data.est_seconds > 900 && (
-            <div className="flex items-start gap-2 text-2xs text-warn">
-              <TriangleAlert className="mt-px size-3.5 shrink-0" /> This will take a while. A smaller region or coarser grid is faster.
+          {est.data?.suggested_spacing_m != null && mode !== "point" && (est.data.too_many_points || spacing < est.data.suggested_spacing_m) ? (
+            <div className="flex items-start gap-2 rounded-md border border-warn/25 bg-warn/8 px-2.5 py-2 text-2xs leading-snug text-fg">
+              <TriangleAlert className="mt-px size-3.5 shrink-0 text-warn" />
+              <span className="flex-1">
+                Searching {area?.description ?? "this area"} at {spacing} m would take {fmtEstimate(est.data.est_seconds)}; use ~{fmtInt(est.data.suggested_spacing_m)} m first,
+                then refine.
+              </span>
+              <Button size="xs" variant="secondary" onClick={() => setSpacing(Math.round(est.data!.suggested_spacing_m!))}>
+                Use {fmtInt(est.data.suggested_spacing_m)} m
+              </Button>
             </div>
+          ) : (
+            est.data &&
+            est.data.est_seconds > 900 && (
+              <div className="flex items-start gap-2 text-2xs text-warn">
+                <TriangleAlert className="mt-px size-3.5 shrink-0" /> This will take a while. A smaller region or coarser grid is faster.
+              </div>
+            )
           )}
           {blockers.length > 0 && (
             <Hint>
               To run: {blockers.join(", ")}.
-              {!c.region && (
+              {!hasSearchArea(c) && (
                 <>
                   {" "}
                   <button className="font-medium text-accent hover:underline" onClick={() => setTab("setup")}>
@@ -249,7 +274,15 @@ export function SearchSection() {
               )}
             </Hint>
           )}
-          <Button variant="primary" icon={<Play />} disabled={!request || blockers.length > 0} loading={starting} onClick={run}>
+          {runError ? <ErrorNote error={runError} /> : null}
+          <Button
+            variant="primary"
+            icon={<Play />}
+            disabled={!request || blockers.length > 0}
+            loading={starting}
+            onClick={run}
+            tip={tooLarge ? TOO_LARGE_REASON : undefined}
+          >
             Run {MODES.find((m) => m.value === mode)!.label.toLowerCase()} search
           </Button>
         </div>

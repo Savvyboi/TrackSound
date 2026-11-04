@@ -16,6 +16,7 @@ import re
 import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from ... import media
 
 CREATION_TAGS = ("creation_time", "com.apple.quicktime.creationdate", "date", "origination_date", "icrd",
                  "date_recorded", "year")
@@ -66,11 +67,9 @@ def parse_timestamp(value: str) -> datetime | None:
 
 def creation_time(path: str | Path) -> str | None:
     """The file's creation time from its container or stream tags (ISO 8601 UTC), if any."""
-    cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)]
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        info = json.loads(r.stdout or "{}")
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        info = media.probe(path)
+    except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError):
         return None
     tag_sets = [info.get("format", {}).get("tags") or {}] + [s.get("tags") or {} for s in info.get("streams", [])]
     for key in CREATION_TAGS:

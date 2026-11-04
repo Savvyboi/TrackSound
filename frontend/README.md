@@ -30,10 +30,12 @@ is the quickest way to see every part of the UI with data.
 
 ```sh
 npm run typecheck    # tsc --noEmit (strict)
-npm run build        # typecheck, then bundle into frontend/dist
+npm run build        # typecheck, then bundle into backend/src/tracksound/web
 ```
 
-`tracksound serve` serves `frontend/dist` at `/` (with a fallback to `index.html` for client
+The build goes into the Python package (`backend/src/tracksound/web`), which is committed so people can
+install from GitHub without Node; CI fails if it is out of date, so run `npm run build` and commit it
+with your UI changes. `tracksound serve` serves it at `/` (with a fallback to `index.html` for client
 routes), so after a build the whole app runs from one process at http://127.0.0.1:8000/.
 All API calls use absolute `/api/...` paths.
 

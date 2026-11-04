@@ -1,0 +1,119 @@
+name: Release
+
+# Builds the downloadable apps and the Python package.
+# - On a version tag (v1.2.3): builds everything and publishes a GitHub Release with the files.
+# - Run it by hand (Actions -> Release -> Run workflow) to build and test without releasing;
+#   the files are then attached to the workflow run as artifacts.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    name: Web UI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build             # writes backend/src/tracksound/web
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web
+          path: backend/src/tracksound/web
+
+  wheel:
+    name: Python package
+    needs: ui
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: backend/src/tracksound/web
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+        working-directory: backend
+      - name: Install the wheel in a clean environment and check it starts
+        run: |
+          uv tool install --python 3.12 backend/dist/*.whl
+          "$(uv tool dir --bin)/tracksound" --version
+          uv run --no-project --python 3.12 python .github/scripts/smoke_test.py "$(uv tool dir --bin)/tracksound"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: backend/dist/*
+
+  app:
+    name: App (${{ matrix.name }})
+    needs: ui
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: windows-x64 }
+          - { os: macos-latest, name: macos-arm64 }
+          - { os: ubuntu-22.04, name: linux-x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web
+          path: backend/src/tracksound/web
+      - uses: astral-sh/setup-uv@v6
+      - name: Build the app
+        working-directory: backend
+        run: uv run --python 3.12 --group bundle pyinstaller packaging/tracksound.spec --noconfirm
+      - name: Smoke test (start, upload, decode, detect, stop)
+        shell: bash
+        run: |
+          exe=backend/dist/TrackSound/TrackSound
+          [ "$RUNNER_OS" = "Windows" ] && exe="$exe.exe"
+          uv run --no-project --python 3.12 python .github/scripts/smoke_test.py "$exe"
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path backend/dist/TrackSound -DestinationPath TrackSound-${{ matrix.name }}.zip
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent backend/dist/TrackSound TrackSound-${{ matrix.name }}.zip
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: tar -C backend/dist -czf TrackSound-${{ matrix.name }}.tar.gz TrackSound
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.name }}
+          path: TrackSound-${{ matrix.name }}.*
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [wheel, app]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la out
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --title "TrackSound $GITHUB_REF_NAME" --notes-file .github/release-notes.md

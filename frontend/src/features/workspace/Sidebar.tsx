@@ -12,6 +12,7 @@ import { LightningTab } from "../lightning/LightningTab";
 import { SetupTab } from "../setup/SetupTab";
 import { SummaryTab } from "../summary/SummaryTab";
 import { useCaseData } from "./caseContext";
+import { hasSearchArea } from "./SearchArea";
 
 const TAB_META: Record<Tab, { label: string; icon: ReactNode; key: string; tip?: string }> = {
   setup: { label: "Setup", icon: <Settings2 />, key: "1" },
@@ -32,7 +33,7 @@ export function Sidebar() {
   const alerts = useAlerts(c.id);
   const busy = (src: string) => jobs.some((j) => jobSource(j.kind) === src);
   const status: Record<Tab, "busy" | "done" | "todo" | null> = {
-    setup: !c.date || !c.region ? "todo" : null,
+    setup: !c.date || !hasSearchArea(c) ? "todo" : null,
     aircraft: busy("aircraft") ? "busy" : searches.data?.some((s) => s.best) ? "done" : null,
     lightning: busy("lightning") ? "busy" : lightning.data?.solves?.some((s) => s.best) ? "done" : null,
     enf: busy("enf") ? "busy" : enf.data?.matches?.some((m) => m.best) ? "done" : null,

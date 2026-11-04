@@ -14,6 +14,7 @@ import { fmtDateTime, fmtUtc } from "../../lib/tz";
 import { focusMap, focusTime, useWs, ws } from "../../state/workspace";
 import { adoptStartTime } from "../workspace/adoptStart";
 import { caseTz, recordingReady, useCaseData } from "../workspace/caseContext";
+import { SearchAreaBanner } from "../workspace/SearchArea";
 import { useQueryClient } from "@tanstack/react-query";
 
 export function AlertsTab() {
@@ -40,6 +41,7 @@ export function AlertsTab() {
           US radio and TV stations and NOAA Weather Radio send alerts with a digital header naming the event, the affected counties and the issue time. A
           decoded header gives a county-level region and a clock anchor.
         </p>
+        <SearchAreaBanner className="mb-3" />
         {alerts.error ? (
           <ErrorNote error={alerts.error} what="Alert decoding" />
         ) : job ? (

@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "./client";
 import type {
   AircraftEvent,
@@ -7,6 +7,8 @@ import type {
   Case,
   CandidateCurves,
   CasePatch,
+  CountrySummary,
+  SearchArea,
   EnfMatch,
   EnfReference,
   EnfState,
@@ -44,6 +46,10 @@ export const qk = {
   enfMatch: (id: string, mid: string) => ["enf", id, "match", mid] as const,
   weather: (id: string, date: string | null, region: unknown) => ["weather", id, date, JSON.stringify(region)] as const,
   enfRefs: ["enf-references"] as const,
+  enfRefsFor: (countries: string[], date: string | null) => ["enf-references", countries.join(","), date] as const,
+  countries: ["countries"] as const,
+  country: (code: string) => ["country", code] as const,
+  area: (id: string, countries: string[], region: unknown) => ["case-area", id, countries.join(","), JSON.stringify(region)] as const,
   alerts: (id: string) => ["alerts", id] as const,
   gridMap: ["enf-grid-map"] as const,
 };
@@ -255,10 +261,17 @@ export function useEnfMatch(id: string, mid: string | null) {
   });
 }
 
-export function useEnfReferences(enabled = true) {
+/** Grid-frequency references; with countries, each has `in_area` and matching ones come first. */
+export function useEnfReferences(enabled = true, countries: string[] = [], date: string | null = null) {
   return useQuery({
-    queryKey: qk.enfRefs,
-    queryFn: () => api.get<EnfReference[]>("/api/enf/references"),
+    queryKey: countries.length ? qk.enfRefsFor(countries, date) : qk.enfRefs,
+    queryFn: () => {
+      const p = new URLSearchParams();
+      for (const c of countries) p.append("country", c);
+      if (countries.length && date) p.set("date", date);
+      const q = p.toString();
+      return api.get<EnfReference[]>(`/api/enf/references${q ? `?${q}` : ""}`);
+    },
     enabled,
     retry: shouldRetry,
     staleTime: 60_000,
@@ -295,5 +308,43 @@ export function useAlerts(id: string, enabled = true) {
     queryFn: () => api.get<AlertsState>(`${casePath(id)}/alerts`),
     enabled,
     retry: shouldRetry,
+  });
+}
+
+// ---- countries and the search area ------------------------------------------------------------
+
+export function useCountries(enabled = true) {
+  return useQuery({
+    queryKey: qk.countries,
+    queryFn: () => api.get<CountrySummary[]>("/api/countries"),
+    enabled,
+    retry: shouldRetry,
+    staleTime: Infinity,
+  });
+}
+
+type CountryFeature = { type: "Feature"; geometry: unknown; properties: CountrySummary };
+
+/** Outlines of the given countries (GeoJSON Features). */
+export function useCountryOutlines(codes: string[]) {
+  return useQueries({
+    queries: codes.map((code) => ({
+      queryKey: qk.country(code),
+      queryFn: () => api.get<CountryFeature>(`/api/countries/${encodeURIComponent(code)}`),
+      retry: shouldRetry,
+      staleTime: Infinity,
+    })),
+  });
+}
+
+/** The area every search covers: the region, the countries, or the region inside the countries. */
+export function useArea(c: Case) {
+  const countries = c.countries ?? [];
+  return useQuery({
+    queryKey: qk.area(c.id, countries, c.region),
+    queryFn: () => api.get<SearchArea>(`${casePath(c.id)}/area`),
+    retry: shouldRetry,
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 }

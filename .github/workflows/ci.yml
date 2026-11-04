@@ -33,3 +33,10 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - name: The committed web UI matches the source
+        run: |
+          if [ -n "$(git status --porcelain -- ../backend/src/tracksound/web)" ]; then
+            git status --short -- ../backend/src/tracksound/web
+            echo "::error::backend/src/tracksound/web is out of date: run 'npm run build' in frontend/ and commit it"
+            exit 1
+          fi

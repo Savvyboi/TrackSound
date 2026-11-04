@@ -42,7 +42,8 @@ type Case = {
   updated_at: number;
   date: string | null;           // "YYYY-MM-DD": the UTC day the recording was made (used for ADS-B)
   timezone: string | null;       // IANA name, for display, e.g. "America/New_York"
-  region: BBox | null;           // search region
+  region: BBox | null;           // search region (optional when countries are set)
+  countries: string[];           // where the recording is known to be from: ISO 3166-1 alpha-2 codes; [] = anywhere
   start_utc: number | null;      // recording start time (unix s) if known or estimated
   start_utc_source: "user" | "aircraft" | "lightning" | "enf" | "alerts" | null;
   temperature_c: number | null;  // air temperature; null means 15 °C
@@ -105,7 +106,8 @@ type Job = {
 | GET | `/api/cases` | | `Case[]`, most recently updated first |
 | POST | `/api/cases` | `{ name }` | `Case` (201) |
 | GET | `/api/cases/{id}` | | `Case` |
-| PATCH | `/api/cases/{id}` | any of `name, notes, date, timezone, region, start_utc, start_utc_source, temperature_c` | `Case` |
+| PATCH | `/api/cases/{id}` | any of `name, notes, date, timezone, region, countries, start_utc, start_utc_source, temperature_c` | `Case` |
+| GET | `/api/cases/{id}/area` | | `SearchArea`: the area every search covers (below) |
 | DELETE | `/api/cases/{id}` | | 204 |
 | POST | `/api/cases/{id}/recording` | multipart form, field `file` | `{ case: Case, job: Job }`; the job decodes the file and builds the spectrogram |
 | GET | `/api/cases/{id}/spectrogram/tile?level=z&index=i` | | binary tile (below); tiles are cached for an hour, so the UI adds `&v=<recording.uploaded_at>` (ignored by the server) to bust the cache after a re-upload |
@@ -143,6 +145,60 @@ for te in t_cpa_emit + linspace(-600, 600, 1201):
 
 Draw the polyline `(t_obs, h * f)` for each harmonic `h = 1..harmonics`, clipped to
 `[t_start - 60, t_end + 60]`.
+
+## Countries (the "recorded in" filter)
+
+If the user knows the country a recording was made in, they set `case.countries`. Every source
+then looks only there:
+
+- **Search area.** It is the region, the countries, or the region inside the countries.
+  - With countries and no region, searches cover the whole countries.
+  - Countries larger than 1,000,000 km² need a region drawn inside them. Searches and
+    downloads return 400 otherwise.
+  - Outlines are Natural Earth 1:10m, simplified, with a 2 km margin, so coasts and borders
+    are not cut off.
+- **Aircraft.**
+  - Grid points lie only inside the area.
+  - The flight download defaults to the area's bbox plus 15 km.
+  - The cost estimate also returns `area_km2` and `suggested_spacing_m`.
+  - Searches over 2,000,000 grid points are refused with a suggested spacing.
+- **Lightning and events.**
+  - The strike download defaults to the area's bbox plus 50 km.
+  - The solver only places the listener inside the area.
+- **Mains hum.**
+  - References whose power grid covers the countries are flagged `in_area`.
+  - Matching against a reference from another grid adds a note.
+  - The country's nominal frequency (50/60 Hz) is in the country data.
+- **Alerts.** A note appears when the countries are outside the US and Canada, where SAME is
+  used.
+
+```ts
+type CountrySummary = {
+  code: string;                  // ISO 3166-1 alpha-2 (a few disputed or special areas use Natural Earth's 3-letter code)
+  iso3: string; name: string; short_name: string; sovereign: string | null; type: string | null;
+  continent: string | null;
+  mains_hz: 50 | 60 | "50/60" | null;
+  bbox: BBox; n_parts: number; area_km2: number;
+  grids: string[];               // synchronous power grids (names match EnfReference.grid), e.g. ["Continental Europe"]
+};
+
+type SearchArea = {
+  countries: string[]; region: BBox | null;
+  bbox: BBox | null;             // what downloads and the map use
+  center: { lat: number; lon: number } | null;   // representative point (largest landmass when no region)
+  area_km2: number;              // land area searched
+  too_large: boolean;            // countries without a region and over 1,000,000 km²: draw a region
+  description: string;           // e.g. "Portugal", "the search region inside Portugal"
+  grids: string[];               // power grids of the countries (on the case date)
+  mains_hz: (50 | 60 | "50/60" | null)[];
+};
+```
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | `/api/countries` | | `CountrySummary[]`, sorted by name |
+| GET | `/api/countries/{code}` | | GeoJSON `Feature` (the outline), properties `CountrySummary` |
+| GET | `/api/enf/references?country=PT&country=ES&date=YYYY-MM-DD` | | `EnfReference[]`, each with `in_area: boolean` when countries are given; matching references first |
 
 ## Aircraft source (prop Doppler curves vs ADS-B)
 

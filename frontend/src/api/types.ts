@@ -14,6 +14,8 @@ export type Case = {
   date: string | null;
   timezone: string | null;
   region: BBox | null;
+  /** where the recording is known to be from: ISO 3166-1 alpha-2 codes; [] = anywhere (older servers omit it) */
+  countries?: string[];
   start_utc: number | null;
   start_utc_source: StartSource | null;
   temperature_c: number | null;
@@ -21,8 +23,40 @@ export type Case = {
 };
 
 export type CasePatch = Partial<
-  Pick<Case, "name" | "notes" | "date" | "timezone" | "region" | "start_utc" | "start_utc_source" | "temperature_c">
+  Pick<Case, "name" | "notes" | "date" | "timezone" | "region" | "countries" | "start_utc" | "start_utc_source" | "temperature_c">
 >;
+
+// ---- countries (the "recorded in" filter) --------------------------------------------------
+
+export type MainsHz = 50 | 60 | "50/60" | null;
+
+export type CountrySummary = {
+  code: string;
+  iso3: string;
+  name: string;
+  short_name: string;
+  sovereign: string | null;
+  type: string | null;
+  continent: string | null;
+  mains_hz: MainsHz;
+  bbox: BBox;
+  n_parts: number;
+  area_km2: number;
+  grids: string[];
+};
+
+export type SearchArea = {
+  countries: string[];
+  region: BBox | null;
+  bbox: BBox | null;
+  /** representative point (the largest landmass when there's no region): use it for "fly to" */
+  center?: { lat: number; lon: number } | null;
+  area_km2: number;
+  too_large: boolean;
+  description: string;
+  grids: string[];
+  mains_hz: MainsHz[];
+};
 
 export type Recording = {
   filename: string;
@@ -152,7 +186,15 @@ export type AircraftSearchRequest = {
   silence?: boolean;
 };
 
-export type SearchEstimate = { n_points: number; n_segments: number; est_seconds: number };
+export type SearchEstimate = {
+  n_points: number;
+  n_segments: number;
+  est_seconds: number;
+  area_km2?: number;
+  suggested_spacing_m?: number;
+  /** over the 2,000,000-point limit: the search itself would be refused */
+  too_many_points?: boolean;
+};
 
 export type CandidateFlight = {
   event_id: string;
@@ -309,6 +351,8 @@ export type EnfReference = {
   url: string | null;
   /** plain-language availability, e.g. "2021 to a few minutes ago" (not in API.md; sent by the server) */
   available?: string | null;
+  /** the reference's grid covers the case's countries (only when countries were given) */
+  in_area?: boolean;
 };
 
 export type EnfMatch = {

@@ -7,23 +7,20 @@ kept for anything that needs video frames or the full bandwidth.
 """
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
+from . import media
+
 STANDARD_SR = 4000
 
 
 def probe(path: str | Path) -> dict:
     """ffprobe summary: duration_s, has_video, has_audio, audio sample rate, video fps."""
-    cmd = ["ffprobe", "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(path)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.returncode != 0:
-        raise ValueError(f"ffprobe could not read the file: {r.stderr.strip()[:300]}")
-    info = json.loads(r.stdout or "{}")
+    info = media.probe(path)
     streams = info.get("streams", [])
     v = [s for s in streams if s.get("codec_type") == "video" and s.get("disposition", {}).get("attached_pic", 0) == 0]
     a = [s for s in streams if s.get("codec_type") == "audio"]
@@ -49,7 +46,7 @@ def probe(path: str | Path) -> dict:
 def decode_to_standard(src: str | Path, dst: str | Path, sr: int = STANDARD_SR) -> tuple[np.ndarray, int]:
     """Decode any ffmpeg-readable file to mono float32 at ``sr`` and write it to ``dst`` (WAV).
     Returns the samples too, so the caller can build the spectrogram without re-reading."""
-    cmd = ["ffmpeg", "-v", "error", "-nostdin", "-i", str(src), "-vn", "-ac", "1", "-ar", str(sr),
+    cmd = [media.ffmpeg_exe(), "-v", "error", "-nostdin", "-i", str(src), "-vn", "-ac", "1", "-ar", str(sr),
            "-f", "f32le", "-acodec", "pcm_f32le", "-"]
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0:

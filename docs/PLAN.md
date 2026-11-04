@@ -247,7 +247,8 @@ flowchart LR
   Lightning, Mains hum and Summary tabs.
   - The timeline shows the spectrogram, the thunder envelope or the ENF trace, all on one
     shared time axis.
-- `npm run build` writes `frontend/dist`, and the Python server serves it at `/`.
+- `npm run build` writes the UI into the Python package (`backend/src/tracksound/web`, committed),
+  and the server serves it at `/`. The wheel and the standalone apps ship the same files.
   Development details are in `frontend/README.md`.
 
 ### Local server (backend, `backend/src/tracksound/`)
@@ -392,7 +393,7 @@ TrackSound/
 │   │   │   └── enf/            # mains-hum extraction, grid references, matching
 │   │   └── data/               # bundled geodata (countries by mains frequency)
 │   └── tests/
-├── frontend/                   # React + TypeScript app, built to frontend/dist
+├── frontend/                   # React + TypeScript app, built into backend/src/tracksound/web
 ├── docs/
 │   ├── PLAN.md, API.md
 │   └── research/               # lightning.md, enf.md, audio-geolocation-techniques.md
@@ -463,6 +464,18 @@ local-only form; the hosting parts of M4 were dropped (section 6).
   time ([research/alerts.md](research/alerts.md)).
 - **Research survey** of other techniques
   ([research/audio-geolocation-techniques.md](research/audio-geolocation-techniques.md)).
+- **"Recorded in" country filter** (`backend/src/tracksound/countries.py`):
+  - Outlines are Natural Earth 1:10m, with a 2 km margin.
+  - Searches only place the listener inside the chosen countries.
+  - Flight and lightning downloads default to those countries.
+  - Mains-hum references are flagged by power grid.
+  - Countries over 1,000,000 km² need a region drawn inside them.
+- **Easy install:**
+  - Standalone apps for Windows, macOS (Apple Silicon) and Linux, built and smoke-tested by
+    `.github/workflows/release.yml` on every version tag.
+  - One-line installers (`install.sh`, `install.ps1`) that also add a desktop shortcut.
+  - ffmpeg bundled through imageio-ffmpeg.
+  - The web UI ships inside the Python package, so no Node is needed to run it.
 
 ### Next
 
@@ -487,10 +500,10 @@ local-only form; the hosting parts of M4 were dropped (section 6).
    - ships vs AIS (US and Danish archives are free);
    - bell-tower fingerprints vs Dove's Guide;
    - trains vs open train-movement data.
-6. **Packaging:**
-   - ship the built UI inside the Python package, so users don't need Node;
-   - a one-command installer;
-   - optional in-browser spectrogram for privacy.
+6. **Distribution polish:**
+   - Code-sign the Windows app and notarise the macOS app, so first launch shows no warning.
+   - Intel-Mac and ARM-Linux builds.
+   - Publish to PyPI (`tracksound` is free there).
 7. **Performance:** split large searches into tiles across processes, and profile the
    CPA and scoring hot paths (Numba or JAX).
 

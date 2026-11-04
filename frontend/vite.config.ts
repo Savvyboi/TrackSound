@@ -12,9 +12,13 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss()],
     server: { port: 5173, proxy },
     preview: { port: 4173, proxy },
+    // The build goes straight into the Python package, so `tracksound serve`, the wheel and the
+    // standalone apps all ship the same UI. The built files are committed (CI checks they are up
+    // to date), which lets people install from GitHub without Node.
     build: {
-      outDir: "dist",
-      sourcemap: true,
+      outDir: "../backend/src/tracksound/web",
+      emptyOutDir: true,
+      sourcemap: false,
       chunkSizeWarningLimit: 1600,
     },
   };

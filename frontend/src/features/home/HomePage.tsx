@@ -256,7 +256,7 @@ function CasesTable({ cases }: { cases: Case[] }) {
         <span>Duration</span>
         <span>Date (UTC)</span>
         <span>Start time</span>
-        <span>Region</span>
+        <span>Area</span>
         <span>Updated</span>
         <span />
       </div>
@@ -320,7 +320,18 @@ function CaseRow({ c, onOpen, onDelete }: { c: Case; onOpen: () => void; onDelet
           <span className="text-sm text-fg-faint">Unknown</span>
         )}
       </div>
-      <div className="truncate text-sm text-fg-muted tnum">{c.region ? fmtBBoxShort(c.region) : <span className="text-fg-faint">not set</span>}</div>
+      <div className="truncate text-sm text-fg-muted tnum">
+        {c.countries?.length ? (
+          <>
+            <span className="text-fg">{c.countries.join(", ")}</span>
+            {c.region && <span className="text-fg-faint"> · {fmtBBoxShort(c.region)}</span>}
+          </>
+        ) : c.region ? (
+          fmtBBoxShort(c.region)
+        ) : (
+          <span className="text-fg-faint">not set</span>
+        )}
+      </div>
       <div className="text-xs text-fg-faint">{fmtAgo(c.updated_at)}</div>
       <div className="flex justify-end opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <IconButton

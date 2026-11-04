@@ -36,6 +36,7 @@ SHIFTS = np.arange(-8, 8.01, 0.5)
 F0_SCALES = np.arange(0.95, 1.0501, 0.005)
 MAX_HEAT = 20_000
 TOP_CANDIDATES = 50
+MAX_SEARCH_POINTS = 2_000_000
 
 EVENT_FIT_FIELDS = ("t_cpa", "t_cpa_emit", "f0", "v", "d", "t_start", "t_end", "score", "f_pre", "f_post")
 
@@ -51,6 +52,7 @@ class Inputs:
     c: float
     elevation: Callable | None = None
     notes: list[str] = field(default_factory=list)
+    area: object | None = None          # tracksound.countries.Area: refine keeps fine-grid points inside it
 
 
 def _noop(_f: float, _m: str = "") -> None:
@@ -66,11 +68,26 @@ def grid_size(bbox: dict, spacing_m: float) -> int:
     return len(np.arange(bbox["lat_min"], bbox["lat_max"], dlat)) * len(np.arange(bbox["lon_min"], bbox["lon_max"], dlon))
 
 
-def make_grid(inp: Inputs, bbox: dict | None, spacing_m: float, point: dict | None = None) -> Grid:
+def make_grid(inp: Inputs, area, spacing_m: float, point: dict | None = None) -> Grid:
+    """Grid of candidate listener positions: one point, or the case's search area (the region,
+    the countries, or the region inside the countries; see tracksound.countries)."""
     if point is not None:
         el = inp.elevation(np.array([point["lat"]]), np.array([point["lon"]])) if inp.elevation else np.zeros(1)
         return Grid.points([point["lat"]], [point["lon"]], np.maximum(el, 0.0))
-    return Grid.make(bbox["lat_min"], bbox["lat_max"], bbox["lon_min"], bbox["lon_max"], spacing_m, inp.elevation)
+    if area is None or area.bbox is None:
+        raise ValueError("set a search region or a country first")
+    lat, lon = area.grid(spacing_m)
+    if len(lat) == 0:
+        raise ValueError("the search area has no grid points: is the region outside the selected country?")
+    if len(lat) > MAX_SEARCH_POINTS:
+        from ...countries import suggest_spacing
+        raise ValueError(f"{area.describe()} needs {len(lat):,} grid points at {spacing_m:.0f} m (the limit is "
+                         f"{MAX_SEARCH_POINTS:,}). Use a coarser grid (about {suggest_spacing(area, MAX_SEARCH_POINTS):.0f} m), "
+                         "then refine, or draw a smaller region.")
+    elev = np.maximum(inp.elevation(lat, lon), 0.0) if inp.elevation else np.zeros_like(lat)
+    b = area.bbox
+    lat0, lon0 = (b["lat_min"] + b["lat_max"]) / 2, (b["lon_min"] + b["lon_max"]) / 2
+    return Grid(lat, lon, elev, lla_to_enu(lat, lon, elev, lat0, lon0), lat0, lon0)
 
 
 def grid_segments(grid: Grid, traces: list[Trace], max_range_m: float = MAX_RANGE_M) -> list[Segment]:
@@ -177,7 +194,7 @@ class Result:
 
 # ---- two-event search (blind grid or one known point) ----------------------------------------
 
-def two_event_search(inp: Inputs, ev1d: dict, ev2d: dict, bbox: dict | None, spacing_m: float = 200.0,
+def two_event_search(inp: Inputs, ev1d: dict, ev2d: dict, area, spacing_m: float = 200.0,
                      point: dict | None = None, tol_s: float = 6.0, silence: bool = True,
                      progress: Progress = _noop) -> Result:
     t_start = time.time()
@@ -186,7 +203,8 @@ def two_event_search(inp: Inputs, ev1d: dict, ev2d: dict, bbox: dict | None, spa
     ev1, ev2 = to_fit(ev1d), to_fit(ev2d)
     h1, h2 = int(ev1d.get("harmonics", 1)), int(ev2d.get("harmonics", 1))
     progress(0.01, "Building the grid" + (" (terrain elevation)" if inp.elevation else ""))
-    grid = make_grid(inp, bbox, spacing_m, point)
+    grid = make_grid(inp, area, spacing_m, point)
+    bbox = None if point is not None else area.bbox
     segs = grid_segments(grid, inp.traces)
     if not segs:
         raise ValueError("no airborne flight segments near the region; fetch flights for this date and region first")
@@ -244,13 +262,14 @@ def two_event_search(inp: Inputs, ev1d: dict, ev2d: dict, bbox: dict | None, spa
 
 # ---- one event with a known clock ------------------------------------------------------------
 
-def single_event_search(inp: Inputs, evd: dict, bbox: dict, t_cpa_utc: float, spacing_m: float = 200.0,
+def single_event_search(inp: Inputs, evd: dict, area, t_cpa_utc: float, spacing_m: float = 200.0,
                         tol_s: float = 30.0, progress: Progress = _noop) -> Result:
     t_start = time.time()
     ev = to_fit(evd)
     h = int(evd.get("harmonics", 1))
     progress(0.01, "Building the grid" + (" (terrain elevation)" if inp.elevation else ""))
-    grid = make_grid(inp, bbox, spacing_m)
+    grid = make_grid(inp, area, spacing_m)
+    bbox = area.bbox
     segs_all = grid_segments(grid, inp.traces)
     segs = [s for s in segs_all if s.t[0] - 300 <= t_cpa_utc <= s.t[-1] + 300]
     if not segs:
@@ -318,6 +337,10 @@ def refine(inp: Inputs, parent: dict, parent_internal: dict, rank: int, events: 
     dlon = half_m / (111320.0 * np.cos(np.radians(lat)))
     progress(0.02, "Building the fine grid")
     g = Grid.make(lat - dlat, lat + dlat, lon - dlon, lon + dlon, spacing_m, inp.elevation)
+    if inp.area is not None and getattr(inp.area, "countries", None):
+        keep = inp.area.contains(g.lat, g.lon)          # stay inside the selected countries
+        if keep.any() and not keep.all():
+            g = Grid(g.lat[keep], g.lon[keep], g.elev[keep], g.enu[keep], g.lat0, g.lon0)
     obs0 = lla_to_enu(lat, lon, cand.get("elev_m", 0.0), lat0, lon0)
 
     # extra events: choose each one's flight once, at the candidate, on the candidate's clock
@@ -410,10 +433,23 @@ def candidate_curves(inp: Inputs, search: dict, internal: dict, rank: int, event
     return {"events": out}
 
 
-def estimate(traces: list[Trace], bbox: dict, spacing_m: float, mode: str, t_cpa_utc: float | None = None) -> dict:
-    """Rough cost of a search. Calibrated on dopplertrack's published run: 380 k points x
-    3 068 segments took about 19 minutes on a laptop."""
-    n_points = 1 if mode == "point" else grid_size(bbox, spacing_m)
+def estimate(traces: list[Trace], area, spacing_m: float, mode: str, t_cpa_utc: float | None = None,
+             point: dict | None = None) -> dict:
+    """Rough cost of a search, plus a coarser spacing to suggest when it would be slow.
+    Calibrated on dopplertrack's published run (380 k points x 3 068 segments, about 19
+    minutes on a laptop) and on our own runs on a 4-core machine (about 2.5 us per pair)."""
+    if mode == "point":
+        p = point or {"lat": 0.0, "lon": 0.0}
+        bbox = {"lat_min": p["lat"] - 0.01, "lat_max": p["lat"] + 0.01, "lon_min": p["lon"] - 0.01, "lon_max": p["lon"] + 0.01}
+        n_points, area_km2 = 1, 0.0
+    else:
+        bbox = area.bbox
+        if area.countries:
+            area_km2 = area.area_km2()
+            n_points = int(area_km2 * 1e6 / spacing_m ** 2)
+        else:
+            n_points = grid_size(bbox, spacing_m)
+            area_km2 = n_points * (spacing_m / 1000) ** 2
     lat0, lon0 = (bbox["lat_min"] + bbox["lat_max"]) / 2, (bbox["lon_min"] + bbox["lon_max"]) / 2
     corners = lla_to_enu(np.array([bbox["lat_min"], bbox["lat_max"]]), np.array([bbox["lon_min"], bbox["lon_max"]]),
                          np.zeros(2), lat0, lon0)
@@ -422,5 +458,18 @@ def estimate(traces: list[Trace], bbox: dict, spacing_m: float, mode: str, t_cpa
     segs = build_segments(traces, lat0, lon0, clip_enu=clip)
     if mode == "single" and t_cpa_utc is not None:
         segs = [s for s in segs if s.t[0] - 300 <= t_cpa_utc <= s.t[-1] + 300]
-    est = 5.0 + 2.5e-6 * n_points * len(segs) + (0.5 * len(segs) if mode == "point" else 0.0)
-    return {"n_points": int(n_points), "n_segments": int(len(segs)), "est_seconds": float(round(est, 1))}
+
+    def cost(n: float) -> float:
+        return 5.0 + 2.5e-6 * n * len(segs) + (0.5 * len(segs) if mode == "point" else 0.0)
+
+    est = cost(n_points)
+    suggested = None
+    if mode != "point" and (est > 600 or n_points > MAX_SEARCH_POINTS):
+        for sp in (250, 300, 400, 500, 750, 1000, 1500, 2000, 3000, 5000, 10000):
+            n = n_points * (spacing_m / sp) ** 2
+            if sp > spacing_m and cost(n) <= 600 and n <= MAX_SEARCH_POINTS:
+                suggested = float(sp)
+                break
+    return {"n_points": int(n_points), "n_segments": int(len(segs)), "est_seconds": float(round(est, 1)),
+            "area_km2": round(float(area_km2), 1), "suggested_spacing_m": suggested,
+            "too_many_points": bool(n_points > MAX_SEARCH_POINTS)}
