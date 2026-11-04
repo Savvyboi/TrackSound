@@ -35,6 +35,7 @@ MAX_PAYLOAD_BYTES = 252            # 268-byte limit (NWS 10-1712 A.1.2) minus th
 BAUD_HYPOTHESES = (0.99, 1.0, 1.01)
 DETECT_THRESHOLD = 0.3             # preamble correlation (1 = clean); noise std ~0.07
 MARKER_THRESHOLD = 0.35            # mean soft agreement with preamble tail + "ZCZC"/"NNNN" (noise std ~0.06)
+MARKER_RELATIVE = 0.7              # same, relative to the soft magnitudes: ~1 at a marker, ~0.5 inside a preamble
 
 
 @dataclass
@@ -189,18 +190,21 @@ def _marker_templates() -> dict[str, tuple[np.ndarray, np.ndarray]]:
 MARKER_TEMPLATES = _marker_templates()
 
 
-def _find_marker(b: np.ndarray) -> tuple[str, int, float]:
-    """(kind, index of the first payload bit, agreement) for the best marker position in b."""
-    best = ("", -1, -1.0)
+def _find_marker(b: np.ndarray) -> tuple[str, int, float, float]:
+    """(kind, index of the first payload bit, agreement, relative agreement) for the best
+    marker position in b. Agreement is absolute (~1 clean burst, 0 ± 0.06 noise, 0 in silence);
+    the relative one divides by the soft magnitudes (~1 at a real marker, ~0.5 inside a preamble)."""
+    best = ("", -1, -1.0, 0.0)
     for kind, (sign, mask) in MARKER_TEMPLATES.items():
         n = len(sign)
         if len(b) < n:
             continue
         win = np.lib.stride_tricks.sliding_window_view(b, n)
-        agree = win @ (sign * mask) / mask.sum()     # absolute: ~1 clean burst, 0 ± 0.06 noise, 0 silence
+        agree = win @ (sign * mask) / mask.sum()
         j = int(np.argmax(agree))
         if agree[j] > best[2]:
-            best = (kind, j + 32, float(agree[j]))
+            rel = float(agree[j] * mask.sum() / (np.abs(win[j]) @ mask + 1e-12))
+            best = (kind, j + 32, float(agree[j]), rel)
     return best
 
 
@@ -260,8 +264,8 @@ def lock_burst(s: np.ndarray, e: np.ndarray, cand: tuple[int, float, float], fs:
     # 2. payload marker: the preamble may have started up to 10 bytes before the candidate
     k = np.arange(-80, 176 + 32)
     b = sample(s, t0 + k * period)
-    kind, m, agree = _find_marker(b)
-    if agree < MARKER_THRESHOLD:
+    kind, m, agree, rel = _find_marker(b)
+    if agree < MARKER_THRESHOLD or rel < MARKER_RELATIVE:
         return None
     t_pay = t0 + k[m] * period
     if kind == "eom":

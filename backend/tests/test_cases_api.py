@@ -101,3 +101,25 @@ def test_report(client):
     assert rep["case"]["id"] == c["id"] and isinstance(rep["estimates"], list)
     assert rep["aircraft"]["events"] == [] and rep["aircraft"]["flights"]["status"] == "none"
     assert client.get("/api/cases/c_nope/report").status_code == 404
+
+
+def test_reupload_clears_recording_results(make_case, client, tmp_path):
+    from tests.conftest import write_tone_wav
+    case = make_case(seconds=60)
+    cid, store = case["id"], client.app.state.store
+    for rel in ("aircraft/events.json", "aircraft/flights.json", "lightning/onsets.json", "lightning/strikes.json",
+                "enf/analysis.json", "alerts/scan.json"):
+        store.write_json(cid, rel, [])
+    store.write_json(cid, "aircraft/searches/as_x.json", {})
+    client.patch(f"/api/cases/{cid}", json={"start_utc": 1.7e9, "start_utc_source": "aircraft"})
+    wav = write_tone_wav(tmp_path / "second.wav", seconds=60, seed=3)
+    with open(wav, "rb") as fh:
+        r = client.post(f"/api/cases/{cid}/recording", files={"file": ("second.wav", fh, "audio/wav")})
+    wait_job(client, r.json()["job"]["id"])
+    d = store.case_dir(cid)
+    for gone in ("aircraft/events.json", "aircraft/searches", "lightning/onsets.json", "enf/analysis.json", "alerts/scan.json"):
+        assert not (d / gone).exists(), gone
+    for kept in ("aircraft/flights.json", "lightning/strikes.json"):
+        assert (d / kept).exists(), kept
+    c = client.get(f"/api/cases/{cid}").json()
+    assert c["start_utc"] is None and c["recording"]["filename"] == "second.wav" and c["recording"]["status"] == "ready"

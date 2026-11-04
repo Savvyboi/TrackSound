@@ -19,6 +19,17 @@ router = APIRouter(prefix="/api", tags=["cases"])
 
 MAX_PLAYBACK_S = 600.0
 
+# Results that belong to one recording (its timeline): cleared when a new file is uploaded.
+# Downloaded catalogues (aircraft/flights.json, lightning/strikes.json) depend only on the
+# date and region, so they are kept.
+RECORDING_DERIVED = (
+    "audio.wav", "spectrogram.npz", "tiles",
+    "aircraft/events.json", "aircraft/searches",
+    "lightning/onsets.json", "lightning/flashes.json", "lightning/solves", "lightning/envelope.npz", "lightning/luma.npz",
+    "enf/analysis.json", "enf/matches",
+    "alerts/scan.json",
+)
+
 
 class BBox(BaseModel):
     lat_min: float = Field(ge=-90, le=90)
@@ -143,7 +154,7 @@ def upload_recording(case_id: str, file: UploadFile = File(...), store: Store = 
     with store.lock(case_id):
         for old in store.case_dir(case_id).glob("original.*"):
             old.unlink()
-        for rel in ("audio.wav", "spectrogram.npz", "tiles"):
+        for rel in RECORDING_DERIVED:
             store.delete_file(case_id, rel)
         dst = store.case_dir(case_id) / f"original.{ext or 'bin'}"
         with open(dst, "wb") as fh:
@@ -152,9 +163,10 @@ def upload_recording(case_id: str, file: UploadFile = File(...), store: Store = 
     if size == 0:
         dst.unlink()
         raise HTTPException(400, "the uploaded file is empty")
+    clock = {} if case.get("start_utc_source") in (None, "user") else {"start_utc": None, "start_utc_source": None}
     case = store.update_case(case_id, recording={
         "filename": name, "size_bytes": size, "uploaded_at": time.time(), "status": "processing", "error": None,
-        "duration_s": None, "has_video": False, "video_fps": None, "spectrogram": None})
+        "duration_s": None, "has_video": False, "video_fps": None, "spectrogram": None}, **clock)
     work, done = _process_recording(store, case_id, dst)
     job = jobs.submit("recording.process", case_id, work, on_done=done)
     return {"case": case, "job": job}

@@ -80,6 +80,11 @@ def blocks(read: Callable[[int], np.ndarray], fs: int) -> Iterator[tuple[int, np
         own += step
 
 
+def _overlaps_eom(b: same.Burst, bursts: list[same.Burst]) -> bool:
+    """True if header burst ``b`` sits on an EOM burst (the same preamble read two ways)."""
+    return any(o.kind == "eom" and o.t - 0.05 <= b.t_payload <= o.t_payload + 32 * o.period for o in bursts)
+
+
 def group_headers(bursts: list[same.Burst]) -> list[list[same.Burst]]:
     """Up to three header bursts per group, each starting within GROUP_GAP_S of the previous."""
     groups: list[list[same.Burst]] = []
@@ -153,6 +158,7 @@ def scan_stream(read: Callable[[int], np.ndarray], fs: int = same.FS, duration_s
             frac = min(0.99, total / fs / duration_s) if duration_s else 0.5
             progress(frac, f"Scanned {total / fs / 60:.1f} min, {len(bursts)} burst{'s' if len(bursts) != 1 else ''}")
     segs = attention.segments(np.concatenate(prom) if prom else np.zeros((0, 3)), fs)
+    bursts = [b for b in bursts if b.kind == "eom" or not _overlaps_eom(b, bursts)]
     headers, undecoded = decode_bursts(bursts, segs)
     return ScanResult(headers=headers, eoms=group_eoms(bursts), attention=segs, undecoded=undecoded,
                       duration_s=total / fs, n_bursts=len(bursts))
