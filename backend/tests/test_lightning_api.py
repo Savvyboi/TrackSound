@@ -202,3 +202,72 @@ def test_demo_case_end_to_end(client):
     assert sol["mode"] == "free"
     assert haversine_m(b["lat"], b["lon"], demo.TRUE_LAT, demo.TRUE_LON) < 1000
     assert abs(b["start_utc"] - demo.TRUE_START_UTC) < 2.0
+
+
+def test_manual_events_and_usgs_fetch(client, make_case, monkeypatch):
+    """Known-time events beyond lightning: a user-entered explosion and USGS ComCat blasts."""
+    from tracksound.sources.lightning import usgs
+    from tests.test_lightning_usgs import SAMPLE, FakeHttp
+    case = make_case(name="blast")
+    cid = case["id"]
+    base = f"/api/cases/{cid}/lightning"
+    client.patch(f"/api/cases/{cid}", json={"region": square_bbox(34.3, -117.4, 30000.0)})
+
+    m = client.post(f"{base}/strikes", json={"t_utc": 1717700000.5, "lat": 34.2, "lon": -117.3}).json()
+    assert m["source"] == "manual" and m["kind"] == "event" and m["sigma_m"] == 250.0 and m["id"].startswith("st_")
+    m2 = client.post(f"{base}/strikes", json={"t_utc": 1717700100, "lat": 34.21, "lon": -117.31, "sigma_m": 50,
+                                              "kind": "Quarry_Blast"}).json()
+    assert m2["kind"] == "quarry blast" and m2["sigma_m"] == 50.0
+    assert client.get(base).json()["strikes"]["source"] == "manual"
+    assert client.post(f"{base}/strikes", json={"t_utc": 1, "lat": 95, "lon": 0}).status_code == 422
+
+    # a USGS fetch replaces catalogue events but keeps the manual ones
+    real_fetch = usgs.fetch_events
+    monkeypatch.setattr(usgs, "fetch_events", lambda *a, **kw: real_fetch(*a, http=FakeHttp(SAMPLE), **kw))
+    t0 = 1717545600.0                                        # 2024-06-05 00:00 UTC
+    r = client.post(f"{base}/strikes/fetch", json={"source": "usgs", "t0_utc": t0, "t1_utc": t0 + 2 * 86400,
+                                                   "event_types": ["quarry blast", "earthquake"]})
+    j = wait_job(client, r.json()["id"])
+    assert j["result"] == {"count": 3} and "quarry blast" in j["message"]
+    strikes = client.get(f"{base}/strikes").json()["strikes"]
+    assert sorted(s["source"] for s in strikes) == ["manual", "manual", "usgs", "usgs", "usgs"]
+    assert any(s.get("depth_m") == 13300.0 and s["kind"] == "earthquake" for s in strikes)
+    sset = client.get(base).json()["strikes"]
+    assert sset["source"] == "usgs+manual" and sset["count"] == 5
+
+    assert client.delete(f"{base}/strikes/{m['id']}").status_code == 204
+    assert client.delete(f"{base}/strikes/{m['id']}").status_code == 404
+    assert client.get(base).json()["strikes"]["count"] == 4
+    csv = b"time,lat,lon\n1717700200,34.25,-117.35\n"
+    assert client.post(f"{base}/strikes/import", files={"file": ("x.csv", csv, "text/csv")}).json() == {"count": 1}
+    strikes = client.get(f"{base}/strikes").json()["strikes"]
+    assert sorted(s["source"] for s in strikes) == ["csv", "manual"]
+    assert client.get(base).json()["strikes"]["source"] == "csv+manual"
+
+    bad = {"source": "usgs", "t0_utc": t0, "t1_utc": t0 + 40 * 86400}
+    assert client.post(f"{base}/strikes/fetch", json=bad).status_code == 400            # > 31 days
+    r = client.post(f"{base}/strikes/fetch", json={**bad, "t1_utc": t0 + 86400, "event_types": ["fireworks"]})
+    assert r.status_code == 400 and "unknown USGS event type" in r.json()["detail"]
+
+
+def test_single_reported_event_flash_to_bang(client, make_case):
+    """One reported explosion + its flash and bang in the recording: the start time and a range ring."""
+    case = make_case(name="explosion", seconds=60.0)
+    cid = case["id"]
+    base = f"/api/cases/{cid}/lightning"
+    start = 1717704000.0
+    client.patch(f"/api/cases/{cid}", json={"region": square_bbox(34.05, -118.25, 15000.0), "temperature_c": 20})
+    t_event = start + 21.3
+    ev = client.post(f"{base}/strikes", json={"t_utc": t_event, "lat": 34.088, "lon": -118.204, "sigma_m": 100,
+                                              "kind": "explosion"}).json()
+    d = float(haversine_m(34.05, -118.25, 34.088, -118.204))
+    c = 331.3 * (1 + 20 / 273.15) ** 0.5
+    client.post(f"{base}/flashes", json={"t": 21.3})
+    client.post(f"{base}/onsets", json={"t": 21.3 + d / c, "sigma_s": 0.1})
+    j = wait_job(client, client.post(f"{base}/solve", json={}).json()["id"])
+    sol = client.get(f"{base}/solves/{j['result']['solve_id']}").json()
+    b = sol["best"]
+    assert sol["mode"] == "flash_sync" and abs(b["start_utc"] - start) < 0.01
+    assert sol["ranges"] and sol["ranges"][0]["strike_id"] == ev["id"] and abs(sol["ranges"][0]["distance_m"] - d) < 50
+    assert abs(float(haversine_m(b["lat"], b["lon"], 34.088, -118.204)) - d) < 300
+    assert any("ring" in n for n in sol["notes"])

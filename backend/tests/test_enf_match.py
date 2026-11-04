@@ -107,3 +107,18 @@ def test_method_follows_trace_quality():
     assert mt.params_for_trace(patchy, 16).method == "diff"        # 600 usable seconds
     assert mt.params_for_trace(patchy[:600], 16).method == "highpass"
     assert mt.params_for_trace(bad, 16).method == "raw"
+
+
+@pytest.mark.parametrize("method", mt.METHODS)
+def test_clean_match_is_clearly_significant(method):
+    """A perfect trace must give a clearly significant z, with a runner-up that is a distinct peak."""
+    ref = synth.random_walk_enf(86400, 50.0, seed=5, std_hz=0.06, tau_s=650)
+    off = 40_000
+    rec = mt.smooth_like_extractor(ref, 16)[off + 8:off + 8 + 1200]
+    res = mt.match_trace(rec, 8.0, ref, T0, T0, T0 + 86400 - 1300, mt.MatchParams(method=method))
+    assert abs(res.start_utc - (T0 + off)) <= 0.5 and res.corr > 0.99
+    assert res.z > 10 and "stands out clearly" in " ".join(res.notes)
+    assert abs(res.top[1]["start_utc"] - res.top[0]["start_utc"]) >= 60
+    ov = res.overlay                                              # Hz, recording shifted onto the reference
+    both = [(a, b) for a, b in zip(ov["rec"], ov["ref"]) if a is not None and b is not None]
+    assert max(abs(a - b) for a, b in both) < 1e-3 and 49.5 < both[0][1] < 50.5

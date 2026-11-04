@@ -52,7 +52,8 @@ class FakeHttp:
 
     def get(self, url, params=None, timeout=None):
         self.calls.append((url, dict(params or {})))
-        rows = self.text.splitlines()[1:]
+        types = set(params["eventtype"].split(","))           # the service filters by type
+        rows = [x for x in self.text.splitlines()[1:] if next(iter(__import__("csv").reader([x])))[14] in types]
         start = int(params["offset"]) - 1
         page = rows[start:start + int(params["limit"])]
 
@@ -73,7 +74,7 @@ def test_fetch_events_pages_and_filters(monkeypatch):
     assert [s["kind"] for s in strikes] == ["quarry blast", "quarry blast", "sonic boom"]
     assert [s["id"] for s in strikes] == ["st_00000", "st_00001", "st_00002"]
     assert info["kinds"] == {"quarry blast": 2, "sonic boom": 1} and not info["truncated"]
-    assert [p["offset"] for _, p in http.calls] == ["1", "3", "5"]
+    assert [p["offset"] for _, p in http.calls] == ["1", "3"]
     p = http.calls[0][1]
     assert p["format"] == "csv" and p["orderby"] == "time-asc" and p["starttime"] == "2024-06-05T00:00:00.000"
     assert "quarry_blast" in p["eventtype"].split(",") and p["minlongitude"] == "-118.50000"

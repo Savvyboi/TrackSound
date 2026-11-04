@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import soundfile as sf
 
 from . import audio_io, spectrogram
@@ -60,6 +61,28 @@ def make_aircraft_demo(store: Store) -> dict:
     return store.update_case(cid, date=date, region=region, timezone="America/New_York", notes=notes)
 
 
+def make_alerts_demo(store: Store) -> dict:
+    """A radio recording with a NOAA Weather Radio Required Weekly Test for Jackson County,
+    Missouri, issued 2026-07-15 17:40 UTC and heard 150 s into the recording."""
+    from .sources.alerts import synth as asynth
+    sr = 22050
+    header = "ZCZC-WXR-RWT-029095+0030-1961740-KEAX/NWS-"
+    alert, _ = asynth.alert_waveform(header, sr=sr, attention="nws", attention_s=8.0, seed=4)
+    rng = np.random.default_rng(9)
+    bed = asynth.music_like(360.0, sr, seed=2) * 0.6 + 0.02 * rng.standard_normal(int(360.0 * sr)).astype(np.float32)
+    x = asynth.mix(alert * 0.35, bed, at_s=150.0, sr=sr)
+    case = store.create_case("Demo: weather-radio alert (synthetic)")
+    cid = case["id"]
+    with tempfile.TemporaryDirectory() as td:
+        wav = Path(td) / "demo-weather-radio.wav"
+        sf.write(str(wav), x, sr, subtype="PCM_16")
+        process_recording_now(store, cid, wav, "demo-weather-radio.wav")
+    notes = ("Synthetic demo. Music with a NOAA Weather Radio Required Weekly Test (SAME header "
+             f"{header}) 150 s in. Truth: Jackson County, Missouri; issued 2026-07-15 17:40 UTC, so the "
+             "recording started at 17:37:30 UTC. Try: Alerts → Scan.")
+    return store.update_case(cid, date="2026-07-15", timezone="America/Chicago", notes=notes)
+
+
 def _try(name: str, fn, store: Store):
     try:
         return fn(store)
@@ -80,6 +103,8 @@ def make_demo_cases(settings: Settings, kind: str = "all") -> list[dict]:
             lightning_demo = None
         if lightning_demo:
             out.append(_try("lightning", lightning_demo, store))
+    if kind in ("alerts", "all"):
+        out.append(_try("alerts", make_alerts_demo, store))
     if kind in ("enf", "all"):
         try:
             from .sources.enf.demo import make_demo_case as enf_demo

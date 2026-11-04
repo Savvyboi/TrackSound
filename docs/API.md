@@ -244,11 +244,16 @@ type AircraftSearch = {
 | POST | `/api/cases/{id}/aircraft/searches/{sid}/refine` | `{ rank?: 1, spacing_m?: 50, half_m?: 600, extra_events?: string[] }` | `Job`; result `{ search_id }`, a new search with `mode: "refine"` |
 | GET | `/api/cases/{id}/aircraft/searches/{sid}/candidates/{rank}/curves` | | `{ events: { event_id, flight_idx, icao, harmonics, t: number[], f: number[] }[] }`: modelled fundamental (Hz) at recording times, for overlaying on the spectrogram |
 
-## Lightning source (thunder and flashes vs lightning catalogues)
+## Lightning source (thunder, blasts and other known-time events)
+
+The tab is called "Lightning", but the source handles any sharp sound whose time and place
+are recorded somewhere: thunder (GLM or an imported catalogue), quarry and mining blasts,
+explosions, sonic booms and felt earthquakes (USGS ComCat), and events the user enters (a
+reported explosion). Onsets and flashes are matched to these "strikes".
 
 ```ts
 type ThunderOnset = {
-  id: string; t: number;         // recording time of the thunder onset
+  id: string; t: number;         // recording time of the onset (thunder or another bang)
   sigma_s: number;               // timing uncertainty
   strength: number;              // dB above the local background
   duration_s: number | null;
@@ -257,19 +262,24 @@ type ThunderOnset = {
 };
 
 type Flash = {
-  id: string; t: number;         // recording time of a lightning flash seen in the video
+  id: string; t: number;         // recording time of a flash seen in the video (lightning, explosion)
   strength: number;              // brightness jump (0..255 luma units)
   origin: "video" | "manual";
   status: "candidate" | "accepted" | "rejected";
 };
 
-type Strike = {
+type Strike = {                  // a catalogued or user-entered event
   id: string; t_utc: number; lat: number; lon: number;
-  sigma_m: number;               // catalogue location uncertainty
-  energy: number | null; kind: string | null;   // e.g. "flash" (GLM), "cg", "ic"
-  source: string;                // "glm-G16" | "glm-G18" | "glm-G19" | "csv"
+  sigma_m: number;               // location uncertainty
+  energy: number | null;         // GLM: optical energy (J); USGS: magnitude; CSV: as given
+  kind: string | null;           // "flash" (GLM), "cg", "ic", "quarry blast", "mining explosion", "explosion",
+                                 // "sonic boom", "earthquake", "event" (manual default) ...
+  source: string;                // "glm-G16" | "glm-G17" | "glm-G18" | "glm-G19" | "usgs" | "csv" | "manual"
+  depth_m?: number;              // source depth when known (USGS); earthquakes use it
+  ref?: string;                  // the catalogue's own event id (USGS, CSV "id" column)
 };
 
+// source: the catalogue ("glm-G19", "usgs", "csv"), with "+manual" when user-entered events are kept beside it
 type StrikeSet = { source: string; t0_utc: number; t1_utc: number; bbox: BBox | null; count: number; fetched_at: number };
 
 type LightningSolveSummary = { id: string; created_at: number; mode: string; best: LightningSolve["best"] };
@@ -278,9 +288,12 @@ type LightningSolve = {
   id: string; created_at: number; request: object;
   mode: "known_start" | "flash_sync" | "free";
   best: { lat: number; lon: number; start_utc: number; score: number; n_matched: number;
-          rms_s: number; uncertainty_m: number } | null;
+          rms_s: number; uncertainty_m: number } | null;   // uncertainty_m: radius the truth is probably within
   candidates: { lat: number; lon: number; start_utc: number; score: number; n_matched: number }[];  // distinct peaks, best first
-  heat: { lat: number; lon: number; score: number }[];
+  // Mixed resolution: a coarse grid over the region (cells of a few hundred m to ~1 km)
+  // plus finer cells (spacing_m) around each peak. Draw each point as a cell_m square,
+  // finer cells over coarser. At most 20 000 points, only scores above 0.05.
+  heat: { lat: number; lon: number; score: number; cell_m: number }[];
   matches: { onset_id: string; strike_id: string; residual_s: number; distance_m: number }[];      // at the best point
   flash_matches: { flash_id: string; strike_id: string; residual_s: number }[];
   ranges: { strike_id: string; lat: number; lon: number; distance_m: number }[];  // flash-to-bang ranges, drawn as circles
@@ -300,19 +313,33 @@ type LightningSolve = {
 | POST | `/api/cases/{id}/lightning/flashes` | `{ t }` | `Flash` (manual, accepted) |
 | PATCH | `/api/cases/{id}/lightning/flashes/{fid}` | `{ t?, status? }` | `Flash` |
 | DELETE | `/api/cases/{id}/lightning/flashes/{fid}` | | 204 |
-| POST | `/api/cases/{id}/lightning/strikes/fetch` | `{ source: "glm", satellite?: "auto", t0_utc, t1_utc, bbox? }` | `Job`; result `{ count }`. GOES GLM from NOAA's public AWS buckets (Americas only); at most 6 h; bbox defaults to `case.region` padded by 50 km |
-| POST | `/api/cases/{id}/lightning/strikes/import` | multipart `file`: CSV with columns `time` (ISO-8601 or unix s), `lat`, `lon`, optional `sigma_m`, `energy`, `kind` | `{ count }` |
+| POST | `/api/cases/{id}/lightning/strikes/fetch` | `{ source: "glm", satellite?: "auto", t0_utc, t1_utc, bbox? }` | `Job`; result `{ count }` (events fetched from the catalogue). GOES GLM from NOAA's public AWS buckets (Americas only); at most 6 h. `satellite`: `auto`, `east`, `west`, `G16`…`G19` |
+| POST | `/api/cases/{id}/lightning/strikes/fetch` | `{ source: "usgs", event_types?: string[], t0_utc, t1_utc, bbox? }` | `Job`; result `{ count }`. USGS ComCat events (mostly US); at most 31 days. `event_types` from `quarry blast`, `mining explosion`, `explosion`, `sonic boom`, `earthquake`, `meteor` (or another ComCat type); default the first four. `sigma_m` from ComCat's `horizontalError`, else 1000 m |
+| POST | `/api/cases/{id}/lightning/strikes/import` | multipart `file`: CSV with columns `time` (ISO-8601 or unix s), `lat`, `lon`, optional `sigma_m`, `energy`, `kind`. A ComCat CSV export also works | `{ count }` |
+| POST | `/api/cases/{id}/lightning/strikes` | `{ t_utc, lat, lon, sigma_m?: 250, kind?: "event" }` | `Strike` with `source: "manual"`: a user-supplied event such as a reported explosion |
 | GET | `/api/cases/{id}/lightning/strikes` | | `{ strikes: Strike[] }` |
-| DELETE | `/api/cases/{id}/lightning/strikes` | | 204 |
+| DELETE | `/api/cases/{id}/lightning/strikes/{sid}` | | 204. Removes one event |
+| DELETE | `/api/cases/{id}/lightning/strikes` | | 204. Removes all events |
 | POST | `/api/cases/{id}/lightning/solve` | `{ start_utc?: number \| null, start_tol_s?: 5, use_flashes?: true, spacing_m?: 250, max_range_km?: 25 }` | `Job`; result `{ solve_id }` |
 | GET | `/api/cases/{id}/lightning/solves/{sid}` | | `LightningSolve` |
 | DELETE | `/api/cases/{id}/lightning/solves/{sid}` | | 204 |
 
+Notes:
+
+- **Fetch and import** replace the earlier catalogue events (GLM, USGS or CSV) but keep the
+  user's manual events. For both sources, `bbox` defaults to `case.region` padded by 50 km.
+- **How sound travels:** blasts, explosions, sonic booms and thunder are air waves, arriving
+  at `t_utc + distance / c`. Earthquakes are heard from the P-wave arrival, at
+  `t_utc + hypocentral distance / 6 km/s`.
+- **One event** with a flash (or a known start time) fixes the clock and the distance to the
+  event: a range ring. `ranges` holds it and the notes say so.
+
 How the solve chooses its mode:
 
-- **`known_start`:** used when `start_utc` is given, or the case has one.
+- **`known_start`:** used when `start_utc` is a number, or when it is omitted and the case
+  has one. An explicit `start_utc: null` ignores the case's start time.
 - **`flash_sync`:** used when there are accepted flashes. The recording clock comes from
-  matching flash times to strike times.
+  matching flash times to event times.
 - **`free`:** otherwise. Searches over the clock offset too.
 
 ## ENF source (mains hum vs grid frequency records)
@@ -321,43 +348,67 @@ How the solve chooses its mode:
 type EnfAnalysis = {
   created_at: number;
   nominal_hz: 50 | 60 | null;    // null: no mains hum found
-  confidence: number;            // 0..1
-  harmonics: { n: number; freq_hz: number; snr_db: number; used: boolean }[];
+  confidence: number;            // 0..1: confidence in nominal_hz (when null: that there is no hum)
+  harmonics: { n: number; freq_hz: number; snr_db: number; used: boolean }[];   // n = 1..6; snr_db: hum line vs noise per analysis bin
   trace: { t0: number; dt: number; f: (number | null)[] };   // ENF (Hz, at the fundamental) per step; null where unreliable
   quality: number;               // fraction of usable steps
   notes: string[];
+  window_s: number;              // analysis window (default 16 s); the reference is smoothed the same way
+  requested_nominal: "auto" | 50 | 60;
 };
 
 type EnfReference = {
-  id: string; name: string;
+  id: string; name: string;      // builtin ids: "gb-neso", "gb-elexon", "nordic-fingrid", "au-nem-aemo", "au-tas-aemo", "pgf-..."; imports: "er_..."
   grid: string;                  // e.g. "Great Britain", "Nordic", "Continental Europe"
   nominal_hz: 50 | 60;
   source: "builtin" | "import";
-  resolution_s: number;
+  resolution_s: number;          // native resolution (everything is matched at 1 s)
   coverage: { t0_utc: number; t1_utc: number }[] | null;   // null for builtin sources fetched on demand
   licence: string | null; url: string | null;
+  available: string | null;      // plain-language availability of a builtin source, e.g. "January 2014 to the end of the last published month"; null for imports
 };
 
 type EnfMatch = {
   id: string; created_at: number;
   reference_id: string; t0_utc: number; t1_utc: number;
   best: { start_utc: number; corr: number; z: number } | null;
-  top: { start_utc: number; corr: number }[];
-  overlay?: { t: number[]; rec: (number | null)[]; ref: (number | null)[] };   // detail endpoint only; recording s
-  notes: string[];
+  top: { start_utc: number; corr: number }[];   // distinct peaks, best first (top[0] is the best; top[1] the runner-up)
+  overlay?: { t: number[]; rec: (number | null)[]; ref: (number | null)[]; rec_shift_hz: number };   // detail endpoint only
+  notes: string[];               // verdict ("stands out clearly" / "probably real" / "not significant") and caveats
+  reference_name: string; method: "diff" | "highpass" | "raw" | null;
+  n_offsets: number; overlap_s: number; reference_valid_fraction: number; analysis_created_at: number | null;
 };
 ```
 
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
 | GET | `/api/cases/{id}/enf` | | `{ analysis: EnfAnalysis \| null, matches: EnfMatch[] }` (no overlays) |
-| POST | `/api/cases/{id}/enf/extract` | `{ nominal?: "auto" \| 50 \| 60 }` | `Job`; result `{ nominal_hz }` |
-| POST | `/api/cases/{id}/enf/match` | `{ reference_id, t0_utc, t1_utc }` | `Job`; result `{ match_id }` |
+| POST | `/api/cases/{id}/enf/extract` | `{ nominal?: "auto" \| 50 \| 60 }` | `Job`; result `{ nominal_hz }`. 400 if the recording is not processed; 409 if one is running |
+| POST | `/api/cases/{id}/enf/match` | `{ reference_id, t0_utc, t1_utc }` | `Job`; result `{ match_id }`. 400 before extraction, without hum, for a reference of the other nominal frequency, or for a window over 31 days |
 | GET | `/api/cases/{id}/enf/matches/{mid}` | | `EnfMatch` with `overlay` |
 | DELETE | `/api/cases/{id}/enf/matches/{mid}` | | 204 |
-| GET | `/api/enf/references` | | `EnfReference[]` |
+| GET | `/api/enf/references` | | `EnfReference[]` (builtins first, then imports) |
+| GET | `/api/enf/references/{rid}` | | `EnfReference`; 404 if unknown |
 | POST | `/api/enf/references/import` | multipart: `file` (CSV `time,frequency`), `name`, `grid`, `nominal_hz` | `EnfReference` |
+| DELETE | `/api/enf/references/{rid}` | | 204; imports only (400 for builtins) |
 | GET | `/api/enf/grid-map` | | GeoJSON `FeatureCollection` of countries, properties `{ name, iso_a3, mains_hz: 50 \| 60 \| "50/60" \| null }` |
+
+Notes:
+
+- **Match window:** `t0_utc`..`t1_utc` bounds the recording's *start* time; the reference is loaded
+  for that window plus the recording's length. At most 31 days. Builtin references download on
+  first use (a NESO day takes seconds, a Fingrid month about a minute) and are cached.
+- **Significance:** `z` compares the best peak with the correlations at all offsets outside its
+  main lobe, on Fisher's scale (atanh r). Chance alone over n offsets gives about
+  `sqrt(2 ln(n / lobe))`; the notes state that level and the verdict. `top` peaks are distinct
+  (each excludes the previous peaks' main lobes, at least 60 s).
+- **Overlay units:** `t` is recording time (s); `rec` and `ref` are in Hz. `ref` is the reference
+  smoothed with the analysis window; `rec` is the recording's ENF shifted by `rec_shift_hz` (the
+  median difference, i.e. the recorder's constant clock offset) so the two lie on top of each
+  other. Long recordings are block-averaged to at most 4000 points.
+- **CSV import:** `time` is ISO-8601 (an offset is honoured; none means UTC) or unix seconds;
+  comma, semicolon or tab separated; any resolution (averaged or interpolated to 1 s); at most
+  120 days per file.
 
 ## Writing a router (backend developers)
 

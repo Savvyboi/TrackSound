@@ -114,10 +114,17 @@ def highpass(x: np.ndarray, length_s: float) -> np.ndarray:
     return out
 
 
-def first_difference(x: np.ndarray) -> np.ndarray:
-    """``d[k] = x[k] - x[k-1]`` (NaN where either is missing), same length and time base as x."""
+def first_difference(x: np.ndarray, clip_sd: float = 5.0) -> np.ndarray:
+    """``d[k] = x[k] - x[k-1]`` (NaN where either is missing), same length and time base as x,
+    winsorised at ``clip_sd`` robust standard deviations: a few tracking glitches or meter spikes
+    must not dominate the correlation."""
     d = np.full(len(x), np.nan)
     d[1:] = x[1:] - x[:-1]
+    ok = np.isfinite(d)
+    if clip_sd and ok.sum() > 10:
+        sd = 1.4826 * float(np.median(np.abs(d[ok] - np.median(d[ok]))))
+        if sd > 0:
+            d[ok] = np.clip(d[ok], -clip_sd * sd, clip_sd * sd)
     return d
 
 

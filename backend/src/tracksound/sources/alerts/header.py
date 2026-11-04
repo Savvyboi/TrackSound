@@ -39,6 +39,7 @@ SEPARATORS = _cls("-+")
 SNAP_BITS = 0.6           # snap to a usual value if the bits to flip are worth < 0.6 typical bits
 MAX_LOCATIONS = 31
 MAX_KAPPA = 60.0
+KAPPA_SCALE = 0.75        # tempers the Gaussian posterior: in 48 trials at -2..+1 dB no wrong header scored >= 0.8
 HEADER_RE = re.compile(r"^ZCZC-([A-Z]{3})-([A-Z]{3})-((?:\d{6}-){0,30}\d{6})\+(\d{4})-(\d{3})(\d{2})(\d{2})-([^-+]{8})-$")
 
 
@@ -229,7 +230,7 @@ def posterior(soft: np.ndarray, text: str, fields: dict) -> tuple[float, float]:
     beta = SIGNS[np.array([ord(c) for c in text])]
     u = (v * beta).ravel()
     a, var = float(np.mean(u)), float(np.var(u))
-    kappa = float(np.clip(a / max(var, 1e-6), 0.0, MAX_KAPPA))
+    kappa = float(np.clip(a / max(var, 1e-6), 0.0, MAX_KAPPA)) * KAPPA_SCALE
     scores = v @ SIGNS.T
     logp = 0.0
     for start, options in _decisions(fields):

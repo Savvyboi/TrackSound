@@ -18,7 +18,7 @@ def main(argv=None):
 
     d = sub.add_parser("demo", help="create a demo case with a synthetic recording (no downloads needed)")
     d.add_argument("--data", help="data folder")
-    d.add_argument("--kind", choices=["aircraft", "lightning", "all"], default="all")
+    d.add_argument("--kind", choices=["aircraft", "lightning", "enf", "alerts", "all"], default="all")
 
     a = ap.parse_args(argv)
     if a.cmd == "serve":

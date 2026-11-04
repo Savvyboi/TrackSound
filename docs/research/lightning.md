@@ -127,7 +127,7 @@ Other error terms:
 ## Implementation
 
 Code: `backend/src/tracksound/sources/lightning/` (pure modules) and
-`backend/src/tracksound/api/lightning.py` (the endpoints in [../API.md](../API.md#lightning-source-thunder-and-flashes-vs-lightning-catalogues)).
+`backend/src/tracksound/api/lightning.py` (the endpoints in [../API.md](../API.md#lightning-source-thunder-blasts-and-other-known-time-events)).
 Tests: `backend/tests/test_lightning_*.py`.
 
 | Module | What it does |
@@ -396,6 +396,38 @@ What the source can expect:
 
 Weighting matches by a distance-dependent detection probability was tried and did not help.
 
+### Known-time events beyond lightning
+
+The same detector, forward model and solver handle any sharp sound with a recorded time and
+place (survey sections 4.1–4.3; `events.py`, `usgs.py`). The tab is still "Lightning".
+
+- **USGS ComCat** (`source: "usgs"`): quarry and mining blasts, explosions, sonic booms,
+  meteors and earthquakes from the FDSN event service.
+  - `format=csv` is used because, as checked on 2026-11-04, only the CSV carries the per-event
+    `horizontalError`; the GeoJSON summary has no error fields.
+  - Friendly type names expand to ComCat's spelling variants (`quarry_blast`, `sonicboom` …).
+  - Results are paged by 20 000. `sigma_m` is the horizontal error (at least 100 m), else
+    1000 m. Windows of up to 31 days are allowed, since these events are sparse.
+  - A live query of southern California, 2024-06-01 to 06-08, returned 7 quarry blasts with
+    0.38–0.41 km errors.
+- **Manual events:** `POST /strikes` adds a user-supplied event (a reported explosion) with
+  `kind: "event"` (a point source) and `sigma_m` 250 m by default. Catalogue fetches and
+  imports keep manual events.
+- **Propagation by kind:**
+  - Air waves (thunder, blasts, explosions, booms) arrive at `t₀ + d/c`.
+  - Earthquakes are heard from the P-wave arrival, at `t₀ + √(d² + depth²)/6 km/s` with a
+    5 % speed tolerance. They fix the clock well and the position only weakly (1 km is
+    0.17 s), so they are left out of the silence check and the flash-to-bang ranges.
+  - Sonic booms and meteors get a 3–5 km position floor and a wide early tolerance, since
+    they are not point sources.
+- **One event:** a single event with a flash (or a known start time) fixes the absolute clock
+  and the distance: a range ring.
+  - With the flash, the clock is taken from it exactly.
+  - `uncertainty_m` grows to the ring's extent (about its diameter), and a note explains that
+    more events or a smaller region are needed.
+  - Tested: a reported explosion 6 km away gave the start time to 0.02 s and a ring 65 m from
+    the true radius.
+
 ### Known limits and next steps
 
 - Elevation, wind and temperature profiles are ignored (1 % travel-time tolerance only).
@@ -403,6 +435,7 @@ Weighting matches by a distance-dependent detection probability was tried and di
   flash extent or event-level geometry.
 - No loudness-to-distance prior yet. `strength` and the rise time carry distance information
   that could cut the ambiguity in dense storms.
-- Sferics are not detected. MTG-LI (Europe and Africa) and Blitzortung are not wired in.
+- Sferics are not detected. MTG-LI (Europe and Africa), Blitzortung, EMSC, launch/landing and
+  fireball catalogues are not wired in.
 - Thunder onsets inside an earlier loud rumble are mostly missed; trucks and gusts can be
   detected. Review the candidates before solving.
