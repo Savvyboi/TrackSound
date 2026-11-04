@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, errorMessage } from "../../api/client";
 import { isActive, useStartJob } from "../../api/jobs";
 import { casePath, setCaseData, useAlerts, useCaseJobs } from "../../api/queries";
-import type { Case, SameHeader } from "../../api/types";
+import type { Case, SameHeader, SameLocation } from "../../api/types";
 import { Button } from "../../components/ui/Button";
 import { Badge, EmptyState, ErrorNote, Hint, KV, ProgressBar, Section, Skeleton } from "../../components/ui/misc";
 import { toast } from "../../components/ui/toast";
@@ -134,67 +134,82 @@ function HeaderCard({ h }: { h: SameHeader }) {
     }
   };
 
+  const toggle = () => {
+    ws.set({ alertId: sel ? null : h.id });
+    if (!sel) {
+      focusTime(h.t, 90);
+      const b = boundsOf(pts);
+      if (b) focusMap({ bbox: { lat_min: b.lat_min - 0.3, lat_max: b.lat_max + 0.3, lon_min: b.lon_min - 0.3, lon_max: b.lon_max + 0.3 } });
+    }
+  };
+
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => {
-        ws.set({ alertId: sel ? null : h.id });
-        if (!sel) {
-          focusTime(h.t, 90);
-          const b = boundsOf(pts);
-          if (b) focusMap({ bbox: { lat_min: b.lat_min - 0.3, lat_max: b.lat_max + 0.3, lon_min: b.lon_min - 0.3, lon_max: b.lon_max + 0.3 } });
-        }
-      }}
-      className={cn("rounded-lg border p-2.5 text-left transition-colors", sel ? "border-accent-line/60 bg-accent-soft/50" : "border-line bg-surface-2/40 hover:border-line-strong")}
-    >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <Badge tone="alerts">{h.event}</Badge>
-            <span className="truncate text-sm font-semibold text-fg">{h.event_name}</span>
+    <div className={cn("rounded-lg border transition-colors", sel ? "border-accent-line/60 bg-accent-soft/50" : "border-line bg-surface-2/40 hover:border-line-strong")}>
+      {/* the summary is the clickable part; the actions below are separate controls */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-pressed={sel}
+        aria-label={`${h.event_name} at ${fmtRec(h.t, 1)}`}
+        onClick={toggle}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), toggle())}
+        className="cursor-pointer p-2.5 text-left"
+      >
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <Badge tone="alerts">{h.event}</Badge>
+              <span className="truncate text-sm font-semibold text-fg">{h.event_name}</span>
+            </div>
+            <div className="mt-0.5 truncate text-2xs text-fg-muted">
+              {h.originator_name} · {h.station}
+            </div>
           </div>
-          <div className="mt-0.5 truncate text-2xs text-fg-muted">
-            {h.originator_name} · {h.station}
+          <span className="text-xs font-semibold text-fg tnum">{fmtRec(h.t, 1)}</span>
+        </div>
+        <div className="mt-2">
+          <KV label="Issued">{fmtUtc(h.issued_utc, false)}</KV>
+          <KV label="Implied start">{fmtDateTime(h.implied_start_utc, tz)}</KV>
+          <KV label="Bursts decoded">
+            {h.repeats} of 3 · confidence {fmtPct(h.confidence)}
+          </KV>
+          <KV label="Valid for">{h.purge_minutes} min</KV>
+        </div>
+        {h.locations.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {h.locations.slice(0, 12).map((l) => (
+              <span key={l.code} className="rounded border border-line bg-surface px-1.5 py-0.5 text-2xs text-fg-muted" title={`FIPS ${l.fips} · code ${l.code}`}>
+                {locationLabel(l)}
+              </span>
+            ))}
+            {h.locations.length > 12 && <span className="text-2xs text-fg-faint">+{h.locations.length - 12} more</span>}
           </div>
+        )}
+        <div className="mt-1.5 truncate font-mono text-[10px] text-fg-faint" title={h.raw}>
+          {h.raw}
         </div>
-        <span className="text-xs font-semibold text-fg tnum">{fmtRec(h.t, 1)}</span>
-      </div>
-      <div className="mt-2">
-        <KV label="Issued">{fmtUtc(h.issued_utc, false)}</KV>
-        <KV label="Implied start">{fmtDateTime(h.implied_start_utc, tz)}</KV>
-        <KV label="Bursts decoded">
-          {h.repeats} of 3 · confidence {fmtPct(h.confidence)}
-        </KV>
-        <KV label="Valid for">{h.purge_minutes} min</KV>
-      </div>
-      {h.locations.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {h.locations.slice(0, 12).map((l) => (
-            <span key={l.code} className="rounded border border-line bg-surface px-1.5 py-0.5 text-2xs text-fg-muted" title={`FIPS ${l.fips}`}>
-              {l.county ?? l.fips}
-              {l.state ? `, ${l.state}` : ""}
-            </span>
-          ))}
-          {h.locations.length > 12 && <span className="text-2xs text-fg-faint">+{h.locations.length - 12} more</span>}
-        </div>
-      )}
-      <div className="mt-1.5 truncate font-mono text-[10px] text-fg-faint" title={h.raw}>
-        {h.raw}
       </div>
       {sel && (
-        <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <Button size="sm" variant={same ? "ghost" : "secondary"} icon={<Clock3 />} disabled={same} onClick={useStart}>
-            {same ? "Is the case start time" : "Use as case start time"}
-          </Button>
-          {pts.length > 0 && (
-            <Button size="sm" variant="secondary" icon={<MapPinned />} onClick={setRegion}>
-              Set region around the counties
+        <div className="flex flex-col gap-2 px-2.5 pb-2.5">
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="sm" variant={same ? "ghost" : "secondary"} icon={<Clock3 />} disabled={same} onClick={useStart}>
+              {same ? "Is the case start time" : "Use as case start time"}
             </Button>
-          )}
+            {pts.length > 0 && (
+              <Button size="sm" variant="secondary" icon={<MapPinned />} onClick={setRegion}>
+                Set region around the counties
+              </Button>
+            )}
+          </div>
+          <Hint>Relayed alerts can air minutes after their issue time, so treat the implied start as approximate.</Hint>
         </div>
       )}
-      {sel && <Hint className="mt-2">Relayed alerts can air minutes after their issue time, so treat the implied start as approximate.</Hint>}
     </div>
   );
+}
+
+/** "Jackson County, MO", with the portion when the alert covers only part of it ("… (northwest part)"). */
+export function locationLabel(l: SameLocation): string {
+  const name = [l.county ?? l.fips, l.state].filter(Boolean).join(", ");
+  return l.part && l.part !== "all" ? `${name} (${l.part} part)` : name;
 }

@@ -1,4 +1,8 @@
-# Validation with real ADS-B data
+# Validation results
+
+Aircraft results come first (real ADS-B days); the other sources follow.
+
+## Aircraft on real ADS-B days
 
 Date: 2026-11-04. These runs go through the HTTP API, exactly as the UI does:
 
@@ -8,7 +12,7 @@ Date: 2026-11-04. These runs go through the HTTP API, exactly as the UI does:
 4. Run a blind search.
 5. Optionally refine.
 
-## What was tested, and what wasn't
+### What was tested, and what wasn't
 
 - **Real flight data.** Each check uses the real adsb.lol archive for a real day, with
   every prop aircraft that was airborne near the area: 1,232 flights for the New York
@@ -28,7 +32,7 @@ Date: 2026-11-04. These runs go through the HTTP API, exactly as the UI does:
 - **Next step:** our own field recordings with GPS and an accurate clock (PLAN.md
   section 13).
 
-## Results
+### Results
 
 | Day and place | Search | Events used | Result | Start-time error | Margin over next pair |
 |---|---|---|---|---|---|
@@ -38,7 +42,7 @@ Date: 2026-11-04. These runs go through the HTTP API, exactly as the UI does:
 | same | same, "silence" filter off | same two events | **51 m**, right flights | +1.5 s | 18.8 % |
 | same | same, filter on | two *adjacent* strong events (no flyover between them) | **51 m**, right flights | −0.5 s | 36.5 % |
 
-## What we changed because of these runs
+### What we changed because of these runs
 
 - **Automatic silence filter.** dopplertrack's "silence" filter drops candidate points
   that would have heard another close prop between the two events. In a busy sky the true
@@ -54,6 +58,63 @@ Date: 2026-11-04. These runs go through the HTTP API, exactly as the UI does:
   the Florida day took 105 s at 25 MB/s, close to the network speed.
 - **Search cost estimate.** It was about 4× optimistic on this busy 4-core machine, and has
   been made more conservative.
+
+## Other sources
+
+Measured on 2026-11-04. Method details are in each source's research note.
+
+### Lightning and known-time events
+
+Detail: [research/lightning.md](../research/lightning.md).
+
+- **Synthetic storms, 20 per setting, with the clock unknown:**
+
+  | Catalogue position error | Median position error | 90th percentile | Clock error (median) |
+  |---|---|---|---|
+  | 300 m (ground-network quality) | about 140 m | 240 m | 0.2 s |
+  | 4 km (GOES GLM satellite) | 2.7 km | 6–7 km | 3–4 s |
+
+  With a 4 km catalogue, knowing every thunder-to-strike match in advance would give
+  about 2.0 km, so the solver is close to what that catalogue allows.
+- **Real GOES GLM data:**
+  - G16, 2024-07-15 near Jacksonville: 2,060 flashes in 30 minutes.
+  - G19, 2025-07-19 in Florida: 1,909 flashes.
+  - In storms that active, each thunder onset fits 10–17 catalogued flashes almost
+    anywhere. Thunder timing alone cannot place a listener against satellite positions.
+    The solver now reports that ambiguity instead of a confident wrong answer.
+  - Video flashes, which fix the clock, or a ground-network catalogue make the problem
+    solvable.
+- **One reported explosion plus a flash in video:**
+  - Start time within 0.02 s.
+  - Flash-to-bang range 5,993 m against 6,000 m.
+
+### Mains hum (ENF)
+
+Detail: [research/enf.md](../research/enf.md).
+
+- **Demo recording:** 20 minutes of synthetic hum following real Great Britain grid
+  frequency (NESO 1 s data, 2026-09-14), with the recorder clock 12 ppm fast.
+  - Matched against the live NESO data for the whole day (86,400 candidate start times).
+  - Start time −0.33 s from the truth.
+  - Correlation 0.79, z 15.7 ("stands out clearly").
+- **30-minute recordings against 3 days of real GB data:** 4 of 4 within 1 s (z 11–12).
+- **Controls whose hum isn't in the reference:** all "not significant" (z ≤ 4.4).
+- **Short recordings:** under about 10 minutes they are often ambiguous over a window of
+  several days.
+
+### Emergency alerts (EAS/SAME)
+
+Detail: [research/alerts.md](../research/alerts.md).
+
+- **Header decoding:**
+  - Exact at +3 dB SNR and above.
+  - About 90 % exact at 0 dB.
+  - Exact under music with the burst 6 dB below the music.
+- **Codecs:** survives MP3 (32–128 kbps), AAC (32–96 kbps), Opus and Vorbis round trips.
+  Opus at 16 kbps fails.
+- **False alerts:** none in 900 s of noise, music and speech.
+- **Demo case:** a weekly test alert in music, 150 s in. It decoded to Jackson County, MO,
+  with the implied start exactly at the true 17:37:30 UTC.
 
 ## Reproducing
 

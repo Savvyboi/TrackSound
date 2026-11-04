@@ -13,6 +13,7 @@ import { fmtDist, fmtDuration, fmtLatLonPretty, fmtPct, fmtSigned } from "../../
 import { circleRing, haversine } from "../../lib/geo";
 import { fmtDateTime, fmtUtc } from "../../lib/tz";
 import { focusMap, setTab, ws } from "../../state/workspace";
+import { locationLabel } from "../alerts/AlertsTab";
 import { adoptStartTime } from "../workspace/adoptStart";
 import { caseTz, useCaseData } from "../workspace/caseContext";
 
@@ -115,10 +116,7 @@ export function SummaryTab() {
     const pts = header.locations.filter((l) => l.lat != null && l.lon != null);
     const lat = pts.length ? pts.reduce((a, l) => a + l.lat!, 0) / pts.length : null;
     const lon = pts.length ? pts.reduce((a, l) => a + l.lon!, 0) / pts.length : null;
-    const names = header.locations
-      .slice(0, 3)
-      .map((l) => [l.county ?? l.fips, l.state].filter(Boolean).join(", "))
-      .join("; ");
+    const names = header.locations.slice(0, 3).map(locationLabel).join("; ");
     ests.push({
       source: "alerts",
       label: "Emergency alert",

@@ -411,25 +411,6 @@ Notes:
   comma, semicolon or tab separated; any resolution (averaged or interpolated to 1 s); at most
   120 days per file.
 
-## Writing a router (backend developers)
-
-- Get shared services with FastAPI dependencies:
-  `store: Store = Depends(get_store)`, `jobs: JobManager = Depends(get_jobs)` from
-  `tracksound.deps`.
-- **Case files:** use `store.read_json(case_id, "lightning/onsets.json", default)` and
-  `store.write_json(...)`. The write is atomic. Wrap read-modify-write sequences in
-  `with store.lock(case_id):`.
-- **Paths:** `store.audio_path(case_id)` is the standard 4 kHz mono float32 WAV.
-  `store.original_path(case_id)` is the upload (for video frames).
-  `tracksound.spectrogram.load(store.spectrogram_path(case_id))` is the cached
-  dopplertrack `Spectrogram`.
-- **Long work:** `jobs.submit(kind, case_id, fn)`, where `fn(ctx)` calls
-  `ctx.progress(fraction, message)`. That call raises `JobCancelled` when the user cancels.
-  Return a small JSON-able result. Write real output to the case folder before returning.
-- **Missing cases:** `store.get_case(case_id)` raises `NotFound`, which becomes a 404.
-  A `ValueError` becomes a 400 with its message.
-- **Downloaded public data** goes under `store.settings.cache_dir / "<source>"`.
-
 ## Alerts source (US emergency-alert data bursts, EAS/SAME)
 
 US radio and TV stations, and NOAA Weather Radio, transmit alerts with a digital header (SAME:
@@ -480,3 +461,22 @@ type SameHeader = {
   the IPAWS cross-check result, and Canadian stations (location codes not mapped);
 - bursts that looked like SAME but could not be decoded;
 - EAS attention signals with no decodable header.
+
+## Writing a router (backend developers)
+
+- Get shared services with FastAPI dependencies:
+  `store: Store = Depends(get_store)`, `jobs: JobManager = Depends(get_jobs)` from
+  `tracksound.deps`.
+- **Case files:** use `store.read_json(case_id, "lightning/onsets.json", default)` and
+  `store.write_json(...)`. The write is atomic. Wrap read-modify-write sequences in
+  `with store.lock(case_id):`.
+- **Paths:** `store.audio_path(case_id)` is the standard 4 kHz mono float32 WAV.
+  `store.original_path(case_id)` is the upload (for video frames).
+  `tracksound.spectrogram.load(store.spectrogram_path(case_id))` is the cached
+  dopplertrack `Spectrogram`.
+- **Long work:** `jobs.submit(kind, case_id, fn)`, where `fn(ctx)` calls
+  `ctx.progress(fraction, message)`. That call raises `JobCancelled` when the user cancels.
+  Return a small JSON-able result. Write real output to the case folder before returning.
+- **Missing cases:** `store.get_case(case_id)` raises `NotFound`, which becomes a 404.
+  A `ValueError` becomes a 400 with its message.
+- **Downloaded public data** goes under `store.settings.cache_dir / "<source>"`.

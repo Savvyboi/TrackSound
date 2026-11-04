@@ -33,6 +33,7 @@ import { BASEMAPS, isDarkBasemap, styleFor, type BasemapId } from "./basemaps";
 import { EMPTY, candidateGeometry, heatImage, positionHeadingAt, solveGeometry, strikesFC, withCategories } from "./geometry";
 import { INTERACTIVE_LAYERS, newSyncState, syncOverlays, type OverlayData } from "./layers";
 import { registerMap } from "./registry";
+import { locationLabel } from "../alerts/AlertsTab";
 
 setWorkerUrl(workerUrl);
 
@@ -182,8 +183,8 @@ export function MapPanel() {
     );
     map.touchZoomRotate.disableRotation();
     // some hosted styles reference sprite images they don't ship: fill them with a blank pixel
-    map.on("styleimagemissing", (e: { id: string }) => {
-      if (!map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+    map.setMissingStyleImageResolver((id) => {
+      if (!map.hasImage(id)) map.addImage(id, { width: 1, height: 1, data: new Uint8Array(4) });
     });
     map.on("style.load", () => {
       styleOk.current = true;
@@ -471,7 +472,7 @@ export function MapPanel() {
             kind: "alert",
             label: h.event,
             active: h.id === alertId,
-            title: `${h.event_name}: ${l.county ?? l.fips}${l.state ? `, ${l.state}` : ""} (county centre)`,
+            title: `${h.event_name}: ${locationLabel(l)} (county centre)`,
             onClick: () => ws.set({ alertId: h.id }),
           });
         }

@@ -449,10 +449,16 @@ local-only form; the hosting parts of M4 were dropped (section 6).
   that searches position and clock ([research/lightning.md](research/lightning.md)).
   - Being extended to any known-time sharp event: USGS-listed blasts and sonic booms,
     and user-entered events.
-- **Mains hum (ENF):**
-  - Hum extraction, 50/60 Hz detection and a country map.
-  - Grid-frequency references, built in and imported.
-  - Start-time matching ([research/enf.md](research/enf.md)).
+- **Mains hum (ENF)** ([research/enf.md](research/enf.md)):
+  - Hum extraction with harmonic combining, 50/60 Hz detection and a country map.
+  - Built-in grid references:
+    - Great Britain: NESO 1 s and Elexon 15 s.
+    - Nordic: Fingrid 10 Hz.
+    - Australia: AEMO 4 s.
+    - Research campaigns: Continental Europe, US West, Texas.
+  - CSV import for other grids.
+  - Start-time matching with an honest significance test.
+  - On real GB data, the start time came within 0.33 s.
 - **Emergency alerts (EAS/SAME):** decoding US alert headers gives counties and an issue
   time ([research/alerts.md](research/alerts.md)).
 - **Research survey** of other techniques
