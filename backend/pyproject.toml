@@ -1,0 +1,37 @@
+[project]
+name = "tracksound"
+version = "0.1.0"
+description = "Local web tool for acoustic geolocation of audio and video recordings"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    "dopplertrack==0.2.0",
+    "fastapi>=0.162.0",
+    "h5py>=3.16.0",
+    "numpy>=2.5.4",
+    "pandas>=3.1.0",
+    "pillow>=13.0.0",
+    "python-multipart>=0.0.33",
+    "requests>=2.34.2",
+    "scipy>=1.18.1",
+    "soundfile>=0.14.0",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+tracksound = "tracksound.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.8.3,<0.12"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: needs network or minutes of CPU"]
+addopts = "-m 'not slow'"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+]

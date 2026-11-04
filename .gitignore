@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Local data (the app keeps cases and downloads in ~/.tracksound by default)
+tracksound-data/
+*.log
+.DS_Store

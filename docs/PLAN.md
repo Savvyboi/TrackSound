@@ -1,7 +1,7 @@
 # TrackSound: project plan
 
-Status: draft v0.1, 2026-11-04. This is a living document. Update it as
-decisions are made and spikes come back with numbers.
+Status: v0.2, 2026-11-04. Decided: local only (section 6). This is a living document;
+update it as decisions are made and results come in.
 
 ## Contents
 
@@ -117,20 +117,23 @@ One person can cover several of these roles early on.
 
 ### Infrastructure
 
-- **Development:** laptops plus Docker Compose.
-- **Hosted (later):** one CPU-heavy machine to start (≥ 8 cores, ≥ 32 GB RAM).
-  Searches are CPU- and memory-bound. Two reference points:
-  - The Oyster Bay blind search builds 86 M (point, flight) rows, about 2.7 GB
-    in memory.
+- **Each user's own computer.** TrackSound runs locally only (section 6). The machine
+  needs Python 3.12+ with uv, Node.js 20+ (to build the UI) and ffmpeg.
+- **Resources:** searches are CPU- and memory-bound, so more cores help. Two reference
+  points:
+  - dopplertrack's 100 × 150 km Oyster Bay search builds 86 M (point, flight) rows, about
+    2.7 GB in memory, and took about 19 minutes on a laptop.
   - A 12-hour spectrogram is about 0.6 GB as float32.
-- **Storage:** disk for the filtered flight store (size to be measured in the M0
-  spike), object storage for uploads, spectrograms and results, and a domain.
+  - Use smaller regions or coarser grids on smaller machines. The app shows a cost
+    estimate before each search.
+- **Disk:** a few hundred MB per cached flight day (props only), plus the cases
+  themselves.
 
 ### Accounts
 
-- None for v1. adsb.lol, Terrain Tiles and Open-Meteo need no key.
-- A map-tile API key if we use a hosted basemap.
-- A EUMETSAT account for lightning, later.
+- None needed. adsb.lol, Terrain Tiles, NOAA GLM and OpenFreeMap need no key.
+- Optional: `GITHUB_TOKEN` raises the GitHub API limit for flight downloads.
+- Grid-frequency sources that need a key are described in [research/enf.md](research/enf.md).
 
 ## 4. Scope
 
@@ -197,154 +200,94 @@ One person can cover several of these roles early on.
 
 ## 6. Architecture
 
+**Decision (2026-11-04): TrackSound runs locally only.** It is a Python server on the
+user's own machine plus a browser UI. There are no accounts, no hosted service, no
+database server and no job queue. That keeps recordings private and keeps the tool free
+to run. This section describes what is built.
+
 ```mermaid
 flowchart LR
   subgraph Browser
-    UI["Web app (React + TS)"]
+    UI["Web app (React + TypeScript)"]
   end
-  subgraph Server
-    API["API (FastAPI)"]
-    Q[("Redis job queue")]
-    W["Workers (Python: tracksound + dopplertrack)"]
-    DB[("Postgres: cases, events, jobs, results")]
-    OBJ[("Object storage: uploads, spectrograms, results")]
-    FS[("Flight store: Parquet by day and tile, DuckDB")]
+  subgraph "Local server (tracksound serve)"
+    API["FastAPI: /api"]
+    J["In-process jobs (threads; flyover detection uses worker processes)"]
+    CASES[("Case folders: JSON documents, audio, spectrogram, tiles")]
+    CACHE[("Download cache: flight days, terrain, GLM files, grid frequency")]
   end
-  subgraph Public data
-    LOL["adsb.lol daily archives"]
-    D8643["ICAO Doc 8643"]
+  subgraph "Public data (downloaded on demand)"
+    LOL["adsb.lol daily ADS-B archives"]
+    D8643["ICAO Doc 8643 aircraft types"]
     DEM["AWS Terrain Tiles"]
-    WX["Open-Meteo archive"]
+    GLM["NOAA GOES GLM lightning"]
+    GRID["Grid-frequency logs"]
   end
   UI <--> API
-  API --> Q --> W
-  API <--> DB
-  W <--> DB
-  W <--> OBJ
-  API <--> OBJ
-  W <--> FS
-  API --> FS
-  W -. "ingest a day on demand" .-> LOL
-  W -.-> D8643
-  W -.-> DEM
-  W -.-> WX
+  API --> J
+  API <--> CASES
+  J <--> CASES
+  J <--> CACHE
+  J -.-> LOL
+  J -.-> D8643
+  J -.-> DEM
+  J -.-> GLM
+  J -.-> GRID
 ```
 
-### Web app (frontend)
+### Web app (frontend, `frontend/`)
 
-- **Framework:** React + TypeScript + Vite. TanStack Query for server state, and
-  a TypeScript client generated from the API's OpenAPI schema.
-- **Map:** MapLibre GL JS with deck.gl layers for the heat map, candidate points
-  and flight tracks.
-  - Basemap: self-hosted Protomaps PMTiles, or a hosted provider (MapTiler,
-    Stadia).
-  - Not `tile.openstreetmap.org`, whose usage policy forbids this kind of load.
-- **Spectrogram viewer:**
-  - WebGL rendering of quantised tiles, with colormap and contrast controls.
-  - A canvas overlay layer for detected curves, harmonics and per-candidate
-    modelled curves.
-  - A cursor linked to the map's flight time slider.
-- **Nice-to-have:** play back a selected window pitch-shifted up a few octaves,
-  so people can *hear* the sweep.
+- React + TypeScript + Vite, TanStack Query for server state, and MapLibre GL for maps.
+  Basemaps are OpenFreeMap vector tiles, with Esri imagery as an option; neither needs an
+  API key.
+- **Case workspace:** a timeline pane and a map pane, plus a sidebar with Setup, Aircraft,
+  Lightning, Mains hum and Summary tabs.
+  - The timeline shows the spectrogram, the thunder envelope or the ENF trace, all on one
+    shared time axis.
+- `npm run build` writes `frontend/dist`, and the Python server serves it at `/`.
+  Development details are in `frontend/README.md`.
 
-### API (FastAPI)
+### Local server (backend, `backend/src/tracksound/`)
 
-REST, plus Server-Sent Events for job progress. Draft endpoints:
+- **API:** FastAPI under `/api`. The contract is [API.md](API.md), and interactive docs
+  are at `/api/docs`.
+- **Storage:** one folder per case under `~/.tracksound/cases/<id>/` (or `--data DIR`),
+  with JSON documents written atomically (`store.py`). Each source keeps its files in its
+  own subfolder (`aircraft/`, `lightning/`, `enf/`).
+- **Jobs:** long work (decoding, detection, downloads, searches) runs in background threads
+  with progress and cooperative cancellation (`jobs.py`). The UI polls `/api/jobs/{id}`.
+  Jobs are not persisted: a job's output is written into the case folder before it
+  finishes.
+- **Uploads:** each upload is decoded once with ffmpeg into a mono 4 kHz float32 WAV that
+  every source reads. The original is kept for video frames.
+- **Spectrogram:** the 40–450 Hz spectrogram (dopplertrack's STFT and whitening) is used
+  for scoring. A uint8 tile pyramid is used for display:
+  - Tiles are 1024 frames wide.
+  - Zoomed-out levels use max-pooling so faint lines survive.
+  - Sizes: 1 hour is 14,400 frames × 840 bins; 12 hours is 172,800 frames.
+- **Flights** (`sources/aircraft/flights.py`):
+  - One UTC day of adsb.lol history is streamed once (about 3.9 GB, minutes) and filtered
+    to props touching the region. The result is cached per day and region, and reused by
+    any case whose region it contains.
+  - The GitHub API is only used to list the archive's parts. When it is rate-limited or
+    blocked, the part names (`.tar.aa`, `.tar.ab`, ...) are probed directly. Set
+    `GITHUB_TOKEN` to raise the limit.
+- **Searches** (`sources/aircraft/search.py`): dopplertrack's physics, filters and scoring,
+  re-expressed as loops that report progress, can be cancelled, and keep what the UI needs:
+  - the flights each candidate heard;
+  - the clock each candidate implies, i.e. the recording's start time;
+  - the modelled curves to draw over the spectrogram.
+- **Terrain:** AWS Terrain Tiles via dopplertrack, cached. Searches fall back to sea level
+  when offline.
+- **Speed of sound:** taken from the case temperature (default 15 °C). Fetching the
+  temperature automatically from a weather archive is a later addition.
+- **Demo cases:** `tracksound demo` builds synthetic cases (aircraft, lightning, ENF) whose
+  true answers are known and that need no downloads.
 
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/cases` | Create a case (date, timezone, region, temperature) |
-| POST | `/cases/{id}/recording` | Upload a recording (multipart; resumable uploads later) |
-| GET | `/recordings/{id}/spectrogram/{z}/{x}` | One spectrogram tile |
-| POST | `/recordings/{id}/detect` | Start flyover detection |
-| GET, POST, PATCH | `/cases/{id}/events` | List, add (manual fit), accept/reject/edit |
-| GET | `/flights?date=&bbox=` | Prop flights for the map (ingests the day on demand) |
-| POST | `/cases/{id}/searches` | Start a search (mode, events, spacing) |
-| GET | `/searches/{id}` | Status and results summary |
-| GET | `/searches/{id}/candidates/{rank}` | Evidence: matched flights, modelled curves, scores |
-| POST | `/searches/{id}/refine` | Fine grid plus extra events |
-| GET | `/jobs/{id}/stream` | Progress (SSE) |
+### Privacy
 
-### Data model (draft)
-
-- **Case:** name, UTC day(s), timezone, region bbox, temperature, notes.
-- **Recording:** case, filename, duration, sample rate, storage keys (raw file,
-  spectrogram, tiles).
-- **Event:** case, `source_type` (`aircraft` for now), status (detected,
-  accepted, rejected, manual), window, band, harmonics, and the fitted
-  parameters as JSON (dopplertrack's `EventFit`: f0, v, d, t_cpa, ...).
-- **Search:** case, mode, config JSON, status, timings, cost estimate.
-- **Candidate:** search, rank, lat/lon, total score, per-event components
-  (flight, time shift, score) as JSON, estimated start time in UTC.
-- **Job:** type, status, progress, error, timestamps.
-
-`source_type` plus a JSON parameter column keeps the schema the same when
-lightning arrives.
-
-### Workers
-
-- They share a Python package with the API and run as separate processes,
-  pulling jobs from Redis.
-- **Job types:** `build_spectrogram`, `detect_events`, `fit_event`,
-  `ingest_adsb_day`, `search` (blind, known-point or single), `refine`.
-- Long jobs report progress and can be cancelled.
-- Results go to object storage, with summary rows in Postgres.
-- (point, flight) CPA tables are cached, keyed by day, region, spacing and trace
-  set. dopplertrack already fingerprints them for this.
-
-### Flight data service
-
-**The problem.** dopplertrack's `fetch-day` streams a whole adsb.lol day archive
-(about 4 GB) from GitHub releases for every query. That's fine for a one-off
-CLI run, but not for a web tool.
-
-**The plan:**
-
-1. `ingest_adsb_day(date)` streams the archive **once**. It keeps prop and
-   unknown-type aircraft, using Doc 8643 engine classes, and writes the raw
-   track points to GeoParquet partitioned by `date / tile` (1°×1° cells or H3
-   resolution 3).
-2. Region queries then read only the tiles that touch the region, using DuckDB.
-   That takes seconds, not minutes, and there's no database server to run.
-3. Days are ingested on demand and cached, with optional prefetch for recent
-   days. Old days are evicted when storage fills up.
-4. Ingestion sits behind a `FlightSource` interface, so OpenSky or another
-   provider can be added as a fallback or cross-check.
-
-**Measure in M0:** ingest time per day, stored size per day after filtering,
-and peak memory.
-
-### Terrain and weather
-
-- **Terrain:** AWS Terrain Tiles (Terrarium), cached on disk or in object
-  storage. dopplertrack's `Terrain` class already handles this.
-- **Temperature:** Open-Meteo historical 2 m temperature at the region centre and
-  recording time, which sets the speed of sound (dopplertrack defaults to
-  15 °C). Users can override it. Wind is a later refinement.
-
-### Where the audio is processed (privacy)
-
-- **v1: on the server.** Upload the file, decode it with ffmpeg, and build the
-  spectrogram there. This is the fastest path, since it uses dopplertrack
-  unchanged.
-- **Later: in the browser (privacy mode).**
-  - Decode the file and compute the 40–450 Hz magnitude spectrogram in the
-    browser (WebAudio plus FFT in a Web Worker or WASM). Upload only that.
-  - With 2 s windows, no phase and that band, the spectrogram is very unlikely
-    to contain intelligible speech, so the raw recording never leaves the
-    user's machine. We should verify this claim before advertising it.
-  - This needs numerical parity with dopplertrack's STFT and whitening, checked
-    with golden-file tests.
-- **Retention:** raw uploads are deleted once the spectrogram is built
-  (configurable), and cases can be deleted.
-
-### Spectrogram delivery
-
-- **Size:** a 1-hour recording is 14,400 frames × about 840 bins
-  (0.25 s × 0.49 Hz). A 12-hour recording is 172,800 frames.
-- **Tiles:** served as a pyramid of uint8 tiles, 1024 frames each.
-  Zoomed-out levels use max-pooling so faint lines survive.
-- **Scoring data:** full-resolution float32 stays on the server for scoring.
+- Recordings stay on the user's machine. The server listens on 127.0.0.1 by default.
+- Network traffic is limited to downloading public reference data and map tiles.
 
 ## 7. Designed for more sources
 
@@ -413,42 +356,43 @@ properly in M5.
 
 ## 9. Tech stack
 
-- **Backend:** Python ≥ 3.12, uv, FastAPI, Pydantic, arq (Redis jobs),
-  SQLAlchemy + Alembic, DuckDB + PyArrow (flight store), NumPy/SciPy via
-  dopplertrack, ffmpeg.
-- **Frontend:** TypeScript, React, Vite, MapLibre GL JS, deck.gl, TanStack
-  Query, an OpenAPI-generated client. Tests with Vitest and Playwright.
-- **Infra:** Docker Compose (api, worker, redis, postgres, optional MinIO).
-  GitHub Actions CI with ruff, mypy, pytest, eslint, tsc and vitest.
-- **Compute:** CPU and NumPy first. The hot paths (CPA table, sweep scoring) are
-  candidates for Numba, JAX or CuPy later. Large searches can be split into
-  grid tiles across workers.
+- **Backend:** Python ≥ 3.12, uv, FastAPI, Pydantic, and NumPy/SciPy/pandas via
+  dopplertrack (pinned at 0.2.0). Also h5py (GOES GLM NetCDF), soundfile and ffmpeg.
+- **Storage:** plain files (JSON documents, NPZ arrays) in a data folder.
+  - No database server; jobs run in-process.
+  - If many cases or concurrent users ever matter, SQLite is the next step.
+- **Frontend:** TypeScript, React, Vite, TanStack Query and MapLibre GL JS.
+  - Basemaps are OpenFreeMap vectors, with Esri imagery as an option.
+  - Playwright is used for browser checks.
+- **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs the backend tests and the
+  frontend typecheck and build.
+- **Compute:** CPU and NumPy.
+  - Flyover detection and flight-archive parsing use worker processes.
+  - The hot paths (CPA table, sweep scoring) are candidates for Numba or JAX later.
 
 ## 10. Repository layout
 
 ```
 TrackSound/
 ├── backend/
-│   ├── pyproject.toml
+│   ├── pyproject.toml, uv.lock
 │   ├── src/tracksound/
-│   │   ├── api/            # FastAPI routes and schemas
-│   │   ├── worker/         # job definitions
-│   │   ├── core/           # source-agnostic: grid, clock, search orchestration, fusion
+│   │   ├── app.py, cli.py      # FastAPI app; `tracksound serve | demo`
+│   │   ├── store.py, jobs.py   # case folders (JSON); in-process jobs with progress/cancel
+│   │   ├── audio_io.py         # ffmpeg decode to the standard 4 kHz mono WAV
+│   │   ├── spectrogram.py      # whitened spectrogram + display tile pyramid
+│   │   ├── demo.py             # synthetic demo cases
+│   │   ├── api/                # routers: cases, jobs, aircraft, lightning, enf, report
 │   │   ├── sources/
-│   │   │   └── aircraft/   # wraps dopplertrack: detector, catalogue, model, scorer
-│   │   ├── data/           # flight store ingest and queries, terrain, weather
-│   │   └── storage/        # DB models, object storage
+│   │   │   ├── aircraft/       # dopplertrack wrapper: flights cache, searches, synthetic worlds
+│   │   │   ├── lightning/      # thunder/flash detection, GLM + CSV catalogues, solver
+│   │   │   └── enf/            # mains-hum extraction, grid references, matching
+│   │   └── data/               # bundled geodata (countries by mains frequency)
 │   └── tests/
-├── frontend/
-│   ├── package.json
-│   └── src/
-│       ├── features/       # case, events, spectrogram, map, results
-│       └── api/            # generated client
+├── frontend/                   # React + TypeScript app, built to frontend/dist
 ├── docs/
-│   ├── PLAN.md
-│   └── research/
-│       └── lightning.md
-├── docker-compose.yml
+│   ├── PLAN.md, API.md
+│   └── research/               # lightning.md, enf.md, audio-geolocation-techniques.md
 └── .github/workflows/ci.yml
 ```
 
@@ -466,14 +410,15 @@ behind our `sources/aircraft` interfaces, and contribute fixes upstream.
 - **Expect API churn.** It's very new (v0.2.0, November 2026), so the pin and our
   wrapper layer matter.
 
-Things we'll probably need upstream, or in our wrapper:
+**What our wrapper adds (done in `sources/aircraft/`).** Each of these could go upstream as a
+pull request:
 
-- Progress callbacks and cancellation for `cpa_table`, `search` and `refine`
-  (`detect` already has a progress callback).
-- Returning the modelled curves for each candidate, so the UI can draw them.
-- Accepting traces from our flight store instead of its own `fetch`.
-  `run_search` already takes a list of traces, so this mostly works today.
-- Exposing per-event score components and the margin to the next flight pair.
+- Progress and cancellation for the CPA table, the scoring loops and refine.
+- Modelled curves per candidate, for drawing on the spectrogram, and the implied start time.
+- Single-event parents for refine.
+- A parallel flight-archive parser (worker processes), and a download that works when the
+  GitHub API is rate-limited (part names are probed directly).
+- Traces come from our per-day cache, not dopplertrack's `fetch`.
 
 ## 12. Roadmap
 
