@@ -8,6 +8,15 @@ It runs entirely on your machine: a small Python server plus a browser UI. Your 
 never leave your computer; the only network traffic is downloading public reference data
 (flight history, lightning, grid frequency, map tiles).
 
+![Aircraft: modelled flyover curves over the spectrogram, and the matching flights on the map](docs/images/aircraft.png)
+
+| Lightning and known events | Mains hum (ENF) |
+|---|---|
+| ![Thunder onsets matched to catalogued strikes](docs/images/lightning.png) | ![Hum frequency matched to Great Britain grid records](docs/images/mains-hum.png) |
+
+*Screenshots from the built-in demo cases (`tracksound demo`). The mains-hum demo matches
+real Great Britain grid data.*
+
 ## Evidence sources
 
 | Source | What it listens for | Matched against | Gives |

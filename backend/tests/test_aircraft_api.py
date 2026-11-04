@@ -101,6 +101,7 @@ def test_detect_search_refine(client, case):
     rid = wait_job(client, j["id"], timeout=300)["result"]["search_id"]
     r = client.get(f"/api/cases/{cid}/aircraft/searches/{rid}").json()
     assert r["mode"] == "refine" and r["parent_id"] == s["id"]
+    assert r["margin"] == s["margin"]          # the flight-pair margin carries over to the refinement
     assert haversine_m(r["best"]["lat"], r["best"]["lon"], LAT0, LON0) < 500
     assert client.get(f"/api/cases/{cid}/aircraft/searches/{rid}/candidates/1/curves").status_code == 200
 

@@ -452,6 +452,8 @@ function MatchDetail({ id }: { id: string }) {
   const same = b && c.start_utc != null && Math.abs(c.start_utc - b.start_utc) < 0.5 && c.start_utc_source === "enf";
   // the best clearly different start time (more than a minute away) shows how distinct the peak is
   const runnerUp = b ? m.top.filter((t) => Math.abs(t.start_utc - b.start_utc) > 60).sort((x, y) => y.corr - x.corr)[0] : undefined;
+  // top[0] is the best match itself; the alternatives are the other distinct peaks
+  const alternatives = b ? m.top.filter((t) => Math.abs(t.start_utc - b.start_utc) > 1) : m.top;
   return (
     <div className="rounded-lg border border-line bg-surface p-2.5 animate-fade-in">
       {b ? (
@@ -463,10 +465,10 @@ function MatchDetail({ id }: { id: string }) {
             <Stat label="Correlation" value={b.corr.toFixed(3)} />
             <Stat label="Z-score" value={b.z.toFixed(1)} sub={runnerUp ? `next peak r ${runnerUp.corr.toFixed(3)}` : undefined} />
           </div>
-          {m.top.length > 1 && (
+          {alternatives.length > 0 && (
             <div className="mt-2">
               <div className="mb-1 text-2xs font-semibold tracking-wider text-fg-faint uppercase">Alternatives</div>
-              {m.top.slice(0, 6).map((t, i) => (
+              {alternatives.slice(0, 5).map((t, i) => (
                 <div key={i} className="flex justify-between py-0.5 text-xs text-fg-muted tnum">
                   <span>{fmtDateTime(t.start_utc, tz)}</span>
                   <span>r {t.corr.toFixed(3)}</span>

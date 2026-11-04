@@ -219,7 +219,8 @@ type AircraftSearch = {
   bbox: BBox | null;
   stats: { n_points: number; n_segments: number; n_cpa: number; n_candidates: number; elapsed_s: number };
   best: AircraftCandidate | null;
-  margin: number | null;         // (best - best other flight pair) / best; null if no runner-up
+  margin: number | null;         // (best - best other flight pair) / best; null if no runner-up.
+                                 // refine: the parent search's margin (neighbouring fine-grid points are not alternatives)
   candidates: AircraftCandidate[];// blind/point/single: best point per flight pair (or flight), ranked. refine: top fine-grid points
   heat: { lat: number; lon: number; score: number }[];   // best score per grid point, at most 20 000 points
   notes: string[];               // plain-language caveats (e.g. the silence filter was switched off); show them

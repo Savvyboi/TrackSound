@@ -398,8 +398,13 @@ def run_search(case_id: str, body: SearchBody, store: Store = Depends(get_store)
     return job
 
 
-def _save_search(store: Store, case_id: str, sid: str, mode: str, parent_id: str | None, request: dict, res: srch.Result):
+def _save_search(store: Store, case_id: str, sid: str, mode: str, parent_id: str | None, request: dict, res: srch.Result,
+                 parent_margin: float | None = None):
     pub = res.public()
+    if mode == "refine":
+        # a refine ranks neighbouring fine-grid points, which always score alike, so their gap
+        # says nothing; the confidence that matters is the parent's margin over the next flight pair
+        pub["margin"] = parent_margin
     doc = {"id": sid, "created_at": time.time(), "mode": mode, "parent_id": parent_id, "request": request,
            "status": "done", "error": None, **pub}
     store.write_json(case_id, _search_path(sid, internal=True),
@@ -473,7 +478,7 @@ def refine_search(case_id: str, sid: str, body: RefineBody, store: Store = Depen
         inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes)
         res = srch.refine(inp, parent, internal, body.rank, evs, body.extra_events, body.spacing_m, body.half_m,
                           progress=ctx.progress)
-        _save_search(store, case_id, new_sid, "refine", sid, request, res)
+        _save_search(store, case_id, new_sid, "refine", sid, request, res, parent_margin=parent.get("margin"))
         return {"search_id": new_sid}
 
     def done(job):
