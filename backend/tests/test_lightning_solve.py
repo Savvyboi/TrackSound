@@ -154,3 +154,51 @@ def test_exact_start_and_no_region():
     res, err, dT = run(storm, onsets, None, start_utc=storm.start_utc, start_tol_s=0.0)
     assert res["mode"] == "known_start" and abs(dT) < 0.02 and err < 1000
     assert any("no search region" in n for n in res["notes"])
+
+
+def _offset(lat, lon, east_m, north_m):
+    import math
+    from tracksound.sources.lightning.geo import EARTH_R
+    return (lat + math.degrees(north_m / EARTH_R),
+            lon + math.degrees(east_m / (EARTH_R * math.cos(math.radians(lat)))))
+
+
+def test_single_known_event_with_flash_gives_a_ring_and_the_clock():
+    """A reported explosion, seen (flash) and heard (bang) on video: range ring + absolute clock."""
+    lat0, lon0, start = 34.05, -118.25, 1717704000.0
+    ela, elo = _offset(lat0, lon0, 4243.0, 4243.0)
+    t_e = start + 312.4
+    d = float(haversine_m(lat0, lon0, ela, elo))
+    ev = catalogue.make_strike(t_e, ela, elo, 100.0, None, "explosion", "manual")
+    ev["id"] = "st_manual"
+    flash = {"id": "lf_1", "t": t_e - start, "status": "accepted"}
+    bang = {"id": "lo_1", "t": t_e - start + d / C, "sigma_s": 0.1, "status": "accepted", "origin": "manual"}
+    res = solver.solve([bang], [flash], [ev], c=C, duration_s=600.0, region=square_bbox(lat0 + 0.03, lon0, 15000.0))
+    b = res["best"]
+    assert res["mode"] == "flash_sync" and abs(b["start_utc"] - start) < 0.01
+    assert abs(float(haversine_m(b["lat"], b["lon"], ela, elo)) - d) < 300           # somewhere on the ring
+    assert len(res["ranges"]) == 1 and abs(res["ranges"][0]["distance_m"] - d) < 50
+    assert b["uncertainty_m"] > d                                                     # the ring is the answer
+    assert any("ring" in n for n in res["notes"])
+
+
+def test_earthquakes_travel_as_p_waves():
+    lat0, lon0, start = 34.05, -118.25, 1717704000.0
+    qla, qlo = _offset(lat0, lon0, -5000.0, 6000.0)
+    hyp = float(np.hypot(haversine_m(lat0, lon0, qla, qlo), 10000.0))
+    eq = catalogue.make_strike(start + 100.0, qla, qlo, 300.0, 2.1, "earthquake", "usgs", depth_m=10000.0)
+    events, onsets = [eq], [{"id": "lo_q", "t": 100.0 + hyp / 6000.0, "sigma_s": 0.05, "status": "accepted",
+                            "origin": "manual"}]
+    for i, (e, n) in enumerate([(3000, -2000), (-4000, -3000), (2000, 5000)]):
+        la, lo = _offset(lat0, lon0, e, n)
+        events.append(catalogue.make_strike(start + 200 + 100 * i, la, lo, 200.0, 1.0, "quarry blast", "usgs"))
+        onsets.append({"id": f"lo_b{i}", "t": 200 + 100 * i + float(haversine_m(lat0, lon0, la, lo)) / C,
+                       "sigma_s": 0.1, "status": "accepted", "origin": "manual"})
+    events = catalogue.assign_ids(events)
+    res = solver.solve(onsets, [], events, c=C, duration_s=600.0, region=square_bbox(lat0, lon0, 15000.0),
+                       start_utc=start + 1.5, start_tol_s=3.0)
+    b = res["best"]
+    assert b["n_matched"] == 4 and abs(b["start_utc"] - start) < 0.05
+    assert float(haversine_m(b["lat"], b["lon"], lat0, lon0)) < 300
+    assert all(abs(m["residual_s"]) < 0.05 for m in res["matches"])
+    assert any("P-wave" in n for n in res["notes"])
