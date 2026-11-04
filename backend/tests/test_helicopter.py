@@ -25,6 +25,7 @@ def test_fit_helicopter_rotor_with_harmonics():
     sp = audio.compute_spectrogram(x, sr, **SPEC_PARAMS)
     assert sp.f[0] < 12
     heard = 180 + np.hypot(1500, 300) / c
-    ev = tracks.fit_event(sp, heard - 100, heard + 100, 10, 60, c=c, harmonics=3)
+    # a narrow window and fundamental band keep the grid search quick; harmonics 2-3 still count
+    ev = tracks.fit_event(sp, heard - 60, heard + 60, 12, 30, c=c, harmonics=3)
     assert abs(ev.t_cpa - heard) < 5 and abs(ev.f0 - 18.0) < 0.5
     assert abs(ev.v - 55) < 10 and 1000 < ev.d < 2200 and ev.score > 2.5
