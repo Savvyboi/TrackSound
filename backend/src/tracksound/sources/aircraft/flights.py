@@ -270,8 +270,10 @@ def summaries(traces: list[Trace]) -> list[dict]:
     types = aircraft_types()
     out = []
     for i, tr in enumerate(traces):
+        row = types.types.get(tr.typ or "") if types else None
         out.append({"idx": i, "icao": tr.icao, "reg": tr.reg, "type": tr.typ, "desc": tr.desc,
-                    "engine": types.engine(tr.typ) if types else None,
+                    "engine": row["EngineType"] if row else None,
+                    "category": row["AircraftDescription"] if row else None,   # LandPlane, Helicopter, ...
                     "t_start_utc": float(tr.t[0]), "t_end_utc": float(tr.t[-1]), "n_points": int(len(tr.t))})
     return out
 

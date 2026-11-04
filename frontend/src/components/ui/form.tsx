@@ -23,7 +23,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     return (
       <div className={cn("relative flex items-center", className)}>
         {prefixIcon && <span className="pointer-events-none absolute left-2.5 text-fg-faint [&_svg]:size-3.5">{prefixIcon}</span>}
-        <input ref={ref} className={cn(inputBase, prefixIcon && "pl-8", suffix && "pr-10")} {...rest} />
+        <input ref={ref} className={cn(inputBase, !!prefixIcon && "pl-8", !!suffix && "pr-10")} {...rest} />
         {suffix && <span className="pointer-events-none absolute right-2.5 text-xs text-fg-faint">{suffix}</span>}
       </div>
     );

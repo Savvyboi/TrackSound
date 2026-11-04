@@ -39,7 +39,7 @@ import {
   type Geom,
   type Theme,
 } from "./axes";
-import { rasterize, sampleDb } from "./rasterize";
+import { histPercentile, paint, rasterize, sampleDb } from "./rasterize";
 import { TileCache } from "./tiles";
 
 export type MarkerKind = "onset" | "flash";
@@ -59,7 +59,11 @@ export type Scene = {
   selectedEventId: string | null;
   checkedEventIds: string[];
   candCurves: CandidateCurves["events"] | null;
+  /** icao → label (registration / type) for the modelled curves */
+  candLabels?: Map<string, string>;
   pendingFit: BoxDraft | null;
+  showOverlays: boolean;
+  showWeak: boolean;
   // lightning
   envOverview: ThunderEnvelope | null;
   envDetail: ThunderEnvelope | null;
@@ -143,7 +147,7 @@ export class TimelineCanvas {
     this.cleanups.push(
       ws.subscribe(() => {
         const s = ws.get();
-        const snap = [s.view, s.freq, s.colormap, s.contrast];
+        const snap = [s.view, s.freq, s.colormap, s.contrast, s.contrastAuto];
         const baseChanged = snap.some((v, i) => v !== this.snap[i]);
         this.snap = snap;
         this.request(baseChanged);
@@ -266,14 +270,33 @@ export class TimelineCanvas {
     this.drawOverlay();
   }
 
-  private getLut(info: SpectrogramInfo) {
+  private getLut(info: SpectrogramInfo, lo: number, hi: number) {
     const s = ws.get();
-    const key = `${s.colormap}|${s.contrast.lo}|${s.contrast.hi}|${info.db_min}|${info.db_max}`;
+    const key = `${s.colormap}|${lo}|${hi}|${info.db_min}|${info.db_max}`;
     if (!this.lut || key !== this.lutKey) {
-      this.lut = buildByteLut(s.colormap, info.db_min, info.db_max, s.contrast.lo, s.contrast.hi);
+      this.lut = buildByteLut(s.colormap, info.db_min, info.db_max, lo, hi);
       this.lutKey = key;
     }
     return this.lut;
+  }
+
+  /** Contrast window: manual, or picked from the visible pixels (floor above the noise, ceiling at the brightest lines). */
+  private contrastFor(info: SpectrogramInfo, hist: Uint32Array, complete: boolean): { lo: number; hi: number } {
+    const s = ws.get();
+    if (!s.contrastAuto) return s.contrast;
+    const cur = s.autoContrast;
+    const pa = histPercentile(hist, 0.62);
+    const pb = histPercentile(hist, 0.9985);
+    if (pa == null || pb == null) return cur ?? s.contrast;
+    const db = (b: number) => info.db_min + (b / 255) * (info.db_max - info.db_min);
+    const lo = Math.round((db(pa) + 0.5) * 2) / 2;
+    const hi = Math.round(Math.max(lo + 13, db(pb) + 1) * 2) / 2;
+    if (!cur || (complete && (Math.abs(cur.lo - lo) > 0.75 || Math.abs(cur.hi - hi) > 1.5))) {
+      const next = { lo, hi };
+      queueMicrotask(() => ws.set({ autoContrast: next }));
+      return next;
+    }
+    return cur;
   }
 
   private drawBase() {
@@ -292,7 +315,9 @@ export class TimelineCanvas {
     }
     const { view, freq } = ws.get();
     const out = new Uint32Array(this.img.data.buffer);
-    const res = rasterize(out, w, h, s.info, this.cache, view.t0, view.t1, freq.lo, freq.hi, this.getLut(s.info), BG, LOADING);
+    const res = rasterize(w, h, s.info, this.cache, view.t0, view.t1, freq.lo, freq.hi);
+    const cw = this.contrastFor(s.info, res.hist, res.complete);
+    paint(out, w * h, this.getLut(s.info, cw.lo, cw.hi), BG, LOADING);
     this.bctx.putImageData(this.img, 0, 0);
     this.level = res.level;
     this.cache.want(res.wanted);
@@ -348,38 +373,152 @@ export class TimelineCanvas {
 
   // ---- aircraft overlays --------------------------------------------------------------
 
-  private curvePath(ctx: CanvasRenderingContext2D, t: ArrayLike<number>, f: ArrayLike<number>, h: number, tMin: number, tMax: number) {
+  /** Screen-space polylines of a curve (split where it leaves the time window or has gaps). */
+  private curveSegments(t: ArrayLike<number>, f: ArrayLike<number>, h: number, tMin: number, tMax: number): Float64Array[] {
     const v = ws.get().view;
     const lo = Math.max(tMin, v.t0 - (v.t1 - v.t0) * 0.05);
     const hi = Math.min(tMax, v.t1 + (v.t1 - v.t0) * 0.05);
-    let pen = false;
+    const segs: Float64Array[] = [];
+    let cur: number[] = [];
+    let lx = -Infinity;
+    let ly = -Infinity;
+    const flush = () => {
+      if (cur.length >= 4) segs.push(Float64Array.from(cur));
+      cur = [];
+      lx = -Infinity;
+    };
     for (let i = 0; i < t.length; i++) {
       const tt = t[i];
       if (tt < lo || tt > hi || !Number.isFinite(f[i])) {
-        pen = false;
+        flush();
         continue;
       }
       const x = this.tx(tt);
       const y = this.fy(h * f[i]);
-      if (!pen) {
-        ctx.moveTo(x, y);
-        pen = true;
-      } else ctx.lineTo(x, y);
+      // skip points closer than ~1.5 px (keeps normals stable)
+      if (Math.abs(x - lx) + Math.abs(y - ly) < 1.5) continue;
+      cur.push(x, y);
+      lx = x;
+      ly = y;
     }
+    flush();
+    return segs;
+  }
+
+  /** Resample a polyline at fixed arc-length steps (stable normals for the rails). */
+  private static resample(seg: Float64Array, step: number): Float64Array {
+    const out: number[] = [seg[0], seg[1]];
+    let px = seg[0];
+    let py = seg[1];
+    let carry = 0;
+    for (let i = 2; i < seg.length; i += 2) {
+      const x = seg[i];
+      const y = seg[i + 1];
+      let dx = x - px;
+      let dy = y - py;
+      let len = Math.hypot(dx, dy);
+      while (carry + len >= step) {
+        const u = (step - carry) / len;
+        px += dx * u;
+        py += dy * u;
+        out.push(px, py);
+        dx = x - px;
+        dy = y - py;
+        len = Math.hypot(dx, dy);
+        carry = 0;
+      }
+      carry += len;
+      px = x;
+      py = y;
+    }
+    out.push(seg[seg.length - 2], seg[seg.length - 1]);
+    return Float64Array.from(out);
+  }
+
+  /** Offset a polyline along its normals by d px (a "rail" beside the curve). */
+  private static rail(seg: Float64Array, d: number): Float64Array {
+    const n = seg.length / 2;
+    const out = new Float64Array(seg.length);
+    for (let i = 0; i < n; i++) {
+      const a = Math.max(0, i - 2);
+      const b = Math.min(n - 1, i + 2);
+      let tx = seg[b * 2] - seg[a * 2];
+      let ty = seg[b * 2 + 1] - seg[a * 2 + 1];
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len;
+      ty /= len;
+      out[i * 2] = seg[i * 2] - ty * d;
+      out[i * 2 + 1] = seg[i * 2 + 1] + tx * d;
+    }
+    return out;
+  }
+
+  private static polyline(ctx: CanvasRenderingContext2D, p: Float64Array) {
+    ctx.moveTo(p[0], p[1]);
+    for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+  }
+
+  /**
+   * Draw a fitted curve as two rails either side of it, so the sweep itself stays visible
+   * between them (a line on top would hide exactly what you want to judge).
+   */
+  private drawRails(ctx: CanvasRenderingContext2D, raw: Float64Array[], gap: number, color: string, width: number, opts: { dash?: number[]; glow?: boolean; fill?: number } = {}) {
+    for (const r of raw) {
+      const seg = TimelineCanvas.resample(r, 3);
+      if (seg.length < 4) continue;
+      const up = TimelineCanvas.rail(seg, -gap);
+      const dn = TimelineCanvas.rail(seg, gap);
+      if (opts.fill) {
+        ctx.beginPath();
+        TimelineCanvas.polyline(ctx, up);
+        for (let i = dn.length - 2; i >= 0; i -= 2) ctx.lineTo(dn[i], dn[i + 1]);
+        ctx.closePath();
+        ctx.fillStyle = hexA(color, opts.fill);
+        ctx.fill();
+      }
+      ctx.beginPath();
+      TimelineCanvas.polyline(ctx, up);
+      TimelineCanvas.polyline(ctx, dn);
+      ctx.setLineDash(opts.dash ?? []);
+      // dark casing for legibility on bright areas
+      ctx.strokeStyle = "rgba(0,0,0,0.55)";
+      ctx.lineWidth = width + 2;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      if (opts.glow) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+      }
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.setLineDash([]);
+    }
+  }
+
+  /** Events drawn on the spectrogram: weak noise fits are hidden unless asked for (or in use). */
+  private visibleEvents(): AircraftEvent[] {
+    const s = this.scene;
+    if (!s.showOverlays) return s.events.filter((e) => e.id === s.selectedEventId);
+    if (s.showWeak) return s.events;
+    return s.events.filter(
+      (e) => !isWeak(e) || e.status === "accepted" || e.origin === "manual" || e.id === s.selectedEventId || s.checkedEventIds.includes(e.id),
+    );
   }
 
   private drawAircraft(ctx: CanvasRenderingContext2D) {
     const s = this.scene;
     const st = ws.get();
     const sel = s.selectedEventId;
-    const order = [...s.events].sort((a, b) => Number(a.id === sel) - Number(b.id === sel) || statusRank(a.status) - statusRank(b.status));
+    const events = this.visibleEvents();
+    const order = [...events].sort((a, b) => Number(a.id === sel) - Number(b.id === sel) || statusRank(a.status) - statusRank(b.status));
 
     // selected event window
     const selEv = s.events.find((e) => e.id === sel);
     if (selEv) {
       const xa = this.tx(selEv.t_start);
       const xb = this.tx(selEv.t_end);
-      ctx.fillStyle = "rgba(255,255,255,0.045)";
+      ctx.fillStyle = "rgba(255,255,255,0.035)";
       ctx.fillRect(xa, this.g.y0, xb - xa, this.g.y1 - this.g.y0);
       ctx.strokeStyle = "rgba(255,255,255,0.18)";
       ctx.setLineDash([3, 4]);
@@ -399,64 +538,43 @@ export class TimelineCanvas {
       const isSel = ev.id === sel;
       const isHover = ev.id === this.hoverEventId;
       const color = STATUS_COLOR[ev.status];
-      const alpha = ev.status === "rejected" ? 0.45 : dimOthers && !isSel ? 0.45 : 1;
+      const alpha = ev.status === "rejected" ? 0.4 : isWeak(ev) && ev.status !== "accepted" ? 0.55 : dimOthers && !isSel ? 0.5 : 1;
       const tMin = ev.t_start - 60;
       const tMax = ev.t_end + 60;
+      ctx.globalAlpha = alpha;
       for (let h = 1; h <= Math.max(1, ev.harmonics); h++) {
-        ctx.beginPath();
-        this.curvePath(ctx, curve.t, curve.f, h, tMin, tMax);
-        ctx.setLineDash(h > 1 ? [5, 4] : []);
-        // dark casing for legibility on bright spectrogram areas
-        ctx.globalAlpha = alpha * 0.55;
-        ctx.strokeStyle = "#000";
-        ctx.lineWidth = isSel ? 4.5 : 3;
-        ctx.stroke();
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = isSel ? 2.2 : isHover ? 1.8 : 1.25;
-        if (isSel) {
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 8;
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+        const segs = this.curveSegments(curve.t, curve.f, h, tMin, tMax);
+        this.drawRails(ctx, segs, isSel ? 6 : 4.5, color, isSel ? 1.5 : isHover ? 1.4 : 1, {
+          dash: h > 1 ? [5, 4] : undefined,
+          glow: isSel,
+          fill: isSel ? 0.07 : isHover ? 0.05 : 0,
+        });
       }
-      ctx.setLineDash([]);
       ctx.globalAlpha = 1;
-      // number badge at the CPA
+      // number badge above the curve at the CPA
       const n = s.eventNumber.get(ev.id);
       const x = this.tx(ev.t_cpa);
       const y = this.fy(ev.f0);
       if (n != null && x > this.g.x0 - 20 && x < this.g.x1 + 20) {
         const checked = s.checkedEventIds.includes(ev.id);
-        this.badge(ctx, x + 6, y - 8, isSel ? `${n} · ${ev.f0.toFixed(1)} Hz` : String(n), color, isSel || checked, alpha);
+        this.badge(ctx, x + 8, y - 16, isSel ? `${n} · ${ev.f0.toFixed(1)} Hz` : String(n), color, isSel || checked, alpha);
       }
     }
 
     // modelled curves of the selected search candidate
     if (s.candCurves) {
       for (const c of s.candCurves) {
+        const f = smoothed(c.f);
         for (let h = 1; h <= Math.max(1, c.harmonics); h++) {
-          ctx.beginPath();
-          this.curvePath(ctx, c.t, c.f, h, -Infinity, Infinity);
-          ctx.setLineDash(h > 1 ? [6, 4] : []);
-          ctx.strokeStyle = "rgba(0,0,0,0.6)";
-          ctx.lineWidth = 4;
-          ctx.stroke();
-          ctx.strokeStyle = CAND_COLOR;
-          ctx.lineWidth = 2;
-          ctx.shadowColor = CAND_COLOR;
-          ctx.shadowBlur = 10;
-          ctx.stroke();
-          ctx.shadowBlur = 0;
+          const segs = this.curveSegments(c.t, f, h, -Infinity, Infinity);
+          this.drawRails(ctx, segs, 3.5, CAND_COLOR, 1.4, { dash: h > 1 ? [6, 4] : undefined, glow: true });
         }
-        ctx.setLineDash([]);
         // label at the curve's midpoint
         const mid = Math.floor(c.t.length / 2);
         if (c.t.length) {
           const x = this.tx(c.t[mid]);
-          const y = this.fy(c.f[mid]);
-          this.badge(ctx, x + 6, y + 14, c.icao.toUpperCase(), CAND_COLOR, true, 1);
+          const y = this.fy(f[mid]);
+          this.badge(ctx, x + 8, y + 18, s.candLabels?.get(c.icao) ?? c.icao.toUpperCase(), CAND_COLOR, true, 1);
         }
       }
     }
@@ -910,9 +1028,9 @@ export class TimelineCanvas {
     const s = this.scene;
     if (s.mode !== "spectrogram") return null;
     let best: string | null = null;
-    let bestD = 7;
+    let bestD = 9;
     const v = ws.get().view;
-    for (const ev of s.events) {
+    for (const ev of this.visibleEvents()) {
       const curve = idealCurve(ev, s.c);
       const tMin = Math.max(ev.t_start - 60, v.t0);
       const tMax = Math.min(ev.t_end + 60, v.t1);
@@ -1115,6 +1233,34 @@ export class TimelineCanvas {
     if (this.scene.mode === "thunder" && this.scene.tool !== "pan") return;
     zoomTimeAt(this.xt(x), e.shiftKey ? 2 : 0.5);
   }
+}
+
+const smoothCache = new WeakMap<ArrayLike<number>, Float64Array>();
+/** Light centred moving average (7 samples) to remove track-position jitter from modelled curves. */
+function smoothed(f: ArrayLike<number>): Float64Array {
+  const hit = smoothCache.get(f);
+  if (hit) return hit;
+  const n = f.length;
+  const out = new Float64Array(n);
+  const k = 3;
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    let cnt = 0;
+    for (let j = Math.max(0, i - k); j <= Math.min(n - 1, i + k); j++) {
+      const v = f[j];
+      if (Number.isFinite(v)) {
+        sum += v;
+        cnt++;
+      }
+    }
+    out[i] = cnt ? sum / cnt : NaN;
+  }
+  smoothCache.set(f, out);
+  return out;
+}
+
+function isWeak(e: AircraftEvent) {
+  return (e.quality ?? (e.score >= 3 ? "possible" : "weak")) === "weak";
 }
 
 function statusRank(s: EventStatus) {

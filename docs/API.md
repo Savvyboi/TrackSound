@@ -65,7 +65,7 @@ type SpectrogramInfo = {
   n_bins: number;     // frequency bins (rows)
   t0: number;         // recording time of frame 0, s
   dt: number;         // frame spacing, s (0.25)
-  f0: number;         // frequency of bin 0, Hz (about 40)
+  f0: number;         // frequency of bin 0, Hz (about 10; older cases 40)
   df: number;         // bin spacing, Hz (about 0.49)
   tile_frames: number;// columns per tile (1024)
   levels: number;     // pyramid levels; level z has one column per 2**z frames
@@ -167,6 +167,7 @@ type FlightSummary = {
   idx: number;                   // index within this case's flight set
   icao: string; reg: string | null; type: string | null; desc: string | null;
   engine: string | null;         // ICAO Doc 8643 engine class, e.g. "Piston", "Turboprop/Turboshaft"
+  category: string | null;       // ICAO Doc 8643 description: "LandPlane", "Helicopter", "Gyrocopter", "SeaPlane", ...
   t_start_utc: number; t_end_utc: number; n_points: number;
 };
 
@@ -225,7 +226,7 @@ type AircraftSearch = {
 | Method | Path | Body / query | Returns |
 |---|---|---|---|
 | GET | `/api/cases/{id}/aircraft/events` | | `AircraftEvent[]` sorted by `t_cpa` |
-| POST | `/api/cases/{id}/aircraft/detect` | `{ band?: [60, 300], harmonics?: 1, top?: 12, window_s?: 240 }` | `Job`; result `{ count }`. Replaces earlier detected candidates and rejected events; keeps accepted and manual ones |
+| POST | `/api/cases/{id}/aircraft/detect` | `{ band?: [60, 300], harmonics?: 1, top?: 12, window_s?: 240 }` (band within 10–450 Hz; helicopter main rotors: about [10, 60] with harmonics 3) | `Job`; result `{ count }`. Replaces earlier detected candidates and rejected events; keeps accepted and manual ones |
 | POST | `/api/cases/{id}/aircraft/fit` | `{ t_start, t_end, f_lo, f_hi, harmonics?: 1 }` | `Job`; result `{ event_id }`. Adds an accepted manual event |
 | PATCH | `/api/cases/{id}/aircraft/events/{eid}` | `{ status?, harmonics? }` | `AircraftEvent` |
 | DELETE | `/api/cases/{id}/aircraft/events/{eid}` | | 204 |
@@ -374,3 +375,34 @@ type EnfMatch = {
 - **Missing cases:** `store.get_case(case_id)` raises `NotFound`, which becomes a 404.
   A `ValueError` becomes a 400 with its message.
 - **Downloaded public data** goes under `store.settings.cache_dir / "<source>"`.
+
+## Alerts source (US emergency-alert data bursts, EAS/SAME)
+
+US radio and TV stations, and NOAA Weather Radio, transmit alerts with a digital header (SAME:
+AFSK at 520.83 baud, sent three times) that names the originator, event, affected counties
+(FIPS codes), the issue time to the minute and the sending station. Decoded from a recording,
+it gives a county-level region and a clock anchor.
+
+```ts
+type SameLocation = { code: string; part: string; fips: string; state: string | null; county: string | null;
+                      lat: number | null; lon: number | null };   // county centroid (US Census gazetteer)
+type SameHeader = {
+  id: string;
+  t: number;                    // recording time of the first decoded burst of this header
+  repeats: number;              // how many of the (normally 3) bursts decoded
+  raw: string;                  // e.g. "ZCZC-WXR-TOR-029095+0030-1281917-KEAX/NWS-"
+  originator: string; originator_name: string;   // "WXR" → "National Weather Service"
+  event: string; event_name: string;             // "TOR" → "Tornado Warning", "RWT" → "Required Weekly Test"
+  locations: SameLocation[];
+  purge_minutes: number;
+  issued_utc: number;           // from the JJJHHMM field; the year comes from the case date (or is inferred)
+  station: string;              // e.g. "KEAX/NWS"
+  implied_start_utc: number;    // issued_utc - t: assumes the burst aired at the issue time (often within minutes; relays can be later)
+  confidence: number;           // 0..1 (bursts agreeing, bit errors corrected)
+};
+```
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | `/api/cases/{id}/alerts` | | `{ headers: SameHeader[], eom: { t: number }[], scanned_at: number \| null, notes: string[] }` |
+| POST | `/api/cases/{id}/alerts/scan` | `{}` | `Job`; result `{ count }`. Decodes from the original upload at a higher sample rate (the 4 kHz copy is too low for the 1562.5/2083.3 Hz tones) |

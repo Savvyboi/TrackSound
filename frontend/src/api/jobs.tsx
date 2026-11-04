@@ -24,13 +24,15 @@ export function jobLabel(kind: string): string {
   if (has("lightning", "solve")) return "Lightning solve";
   if (has("enf", "extract")) return "Extracting mains hum";
   if (has("enf", "match")) return "Matching mains hum";
+  if (has("alert")) return "Scanning for alert bursts";
   return titleCase(kind);
 }
 
 /** Which source a job belongs to (used to refetch the right data when it finishes). */
-export function jobSource(kind: string): "recording" | "aircraft" | "lightning" | "enf" | "other" {
+export function jobSource(kind: string): "recording" | "aircraft" | "lightning" | "enf" | "alerts" | "other" {
   const p = kind.toLowerCase().split(/[._-]/)[0];
-  if (p === "recording" || p === "aircraft" || p === "lightning" || p === "enf") return p;
+  if (p === "recording" || p === "aircraft" || p === "lightning" || p === "enf" || p === "alerts") return p;
+  if (p === "alert") return "alerts";
   return "other";
 }
 
@@ -67,9 +69,11 @@ export function invalidateForJob(qc: QueryClient, job: Job) {
     void qc.invalidateQueries({ queryKey: qk.aircraft(cid) });
     void qc.invalidateQueries({ queryKey: qk.lightning(cid) });
     void qc.invalidateQueries({ queryKey: qk.enf(cid) });
+    void qc.invalidateQueries({ queryKey: qk.alerts(cid) });
   } else if (src === "aircraft") void qc.invalidateQueries({ queryKey: qk.aircraft(cid) });
   else if (src === "lightning") void qc.invalidateQueries({ queryKey: qk.lightning(cid) });
   else if (src === "enf") void qc.invalidateQueries({ queryKey: qk.enf(cid) });
+  else if (src === "alerts") void qc.invalidateQueries({ queryKey: qk.alerts(cid) });
   else void qc.invalidateQueries({ queryKey: qk.case(cid) });
 }
 

@@ -966,7 +966,7 @@ classification, reverberation, infrasound and weather sounds (section 8).
 - Lo, K. W. & Ferguson, B. G. (2000). [Broadband passive acoustic technique for target motion parameter estimation](https://doi.org/10.1109/7.826319). IEEE TAES 36(1), 163–175.
 - Lo, K. W., Perry, S. W. & Ferguson, B. G. (2002). [Aircraft flight parameter estimation using acoustical Lloyd's mirror effect](https://doi.org/10.1109/7.993235). IEEE TAES 38(1), 137–151.
 - Lo, K. W., Ferguson, B. G., Gao, Y. & Maguer, A. (2003). [Aircraft flight parameter estimation using acoustic multipath delays](https://doi.org/10.1109/TAES.2003.1188908). IEEE TAES 39(1), 259–268.
-- Sadasivan, S., Gurubasavaraj, P. M. & Sekar, S. R. (2001). [Acoustic signature of an unmanned air vehicle exploitation for aircraft localisation and parameter estimation](https://doi.org/10.14429/dsj.51.2238). Defence Science Journal 51(3), 279–284.
+- Sadasivan, S., Gurubasavaraj, M. & Sekar, S. R. (2001). [Acoustic signature of an unmanned air vehicle exploitation for aircraft localisation and parameter estimation](https://doi.org/10.14429/dsj.51.2238). Defence Science Journal 51(3), 279–284.
 - Stutz, C. M. et al. (NASA Langley). [Acoustic Assessment of an MD530F Helicopter in Maneuvering Flight](https://ntrs.nasa.gov/citations/20250002950). NTRS 20250002950 (main-rotor blade-passing frequency 39.75 Hz).
 - Brentner, K. S. & Farassat, F. (2003). [Modeling aerodynamically generated sound of helicopter rotors](https://doi.org/10.1016/s0376-0421(02)00068-4). Progress in Aerospace Sciences 39, 83–120.
 - McAlpine, A. & Fisher, M. J. (2001). [On the prediction of "buzz-saw" noise in aero-engine inlet ducts](https://doi.org/10.1006/jsvi.2001.3770). Journal of Sound and Vibration 248(1), 123–149.

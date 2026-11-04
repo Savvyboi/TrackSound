@@ -35,6 +35,10 @@ HEAT_MAX = 20000
 FLASH_TOL_S = 0.25             # flash time vs strike time
 FLASH_WEIGHT = 1.0             # a coinciding flash counts like a matched onset
 MAX_SYNC_CANDIDATES = 40
+POLISH_ROUNDS = 3              # least-squares polish, re-associating the matches between rounds
+POLISH_DROP_ABS = 0.5          # ... kept unless the score drops by more than this
+POLISH_DROP_REL = 0.05         # ... or this fraction of it
+AMBIGUOUS_ALTERNATIVES = 1.5   # mean other strikes fitting each matched onset: above this, matches are not distinctive
 
 
 def choose_mode(start_utc: float | None, n_accepted_flashes: int, use_flashes: bool) -> str:
@@ -139,15 +143,28 @@ class _Search:
                 "n": int(res["n"][i]), "spacing": spacing, "gy": gy, "gu": gu, "res": res, "interval": (lo, hi),
                 "bonus": bonus}
 
-    def polish(self, r: dict, T_prior, interval) -> dict:
-        y, u, T, cov, _ = self.p.polish(r["y"], r["u"], r["T"], T_prior)
-        T = float(np.clip(T, *interval)) if interval else T
+    def polish(self, r: dict, T_prior, interval: tuple[float, float]) -> dict:
+        """Least-squares polish of a refined peak (re-associating a few times).
+
+        The soft-count score finds the right basin but, with a one-sigma kernel, is an
+        inefficient estimator; weighted least squares on the matched pairs is the efficient
+        one. The polished point is kept unless it loses a sizeable part of the score (which
+        would mean the association changed for the worse)."""
+        T_grid = float(np.clip(r["T"], *interval))
+        ps0 = self.p.evaluate(np.array([r["y"]]), np.array([r["u"]]), np.array([T_grid]), 0.0)
+        s0 = float(ps0.score[0]) + r.get("bonus", 0.0)
+        y, u, T = r["y"], r["u"], T_grid
+        cov = None
+        for _ in range(POLISH_ROUNDS):
+            y2, u2, T2, cov2, _ = self.p.polish(y, u, T, T_prior)
+            if cov2 is None:
+                break
+            y, u, T, cov = y2, u2, float(np.clip(T2, *interval)), cov2
         ps = self.p.evaluate(np.array([y]), np.array([u]), np.array([T]), 0.0)
         s = float(ps.score[0]) + r.get("bonus", 0.0)
-        if cov is not None and s >= r["score"] - 0.05:
+        if cov is not None and s >= s0 - max(POLISH_DROP_ABS, POLISH_DROP_REL * abs(s0)):
             return {**r, "y": y, "u": u, "T": T, "score": s, "n": int(ps.n_matched[0]), "cov": cov}
-        ps0 = self.p.evaluate(np.array([r["y"]]), np.array([r["u"]]), np.array([r["T"]]), 0.0)
-        return {**r, "score": float(ps0.score[0]) + r.get("bonus", 0.0), "n": int(ps0.n_matched[0]), "cov": None}
+        return {**r, "T": T_grid, "score": s0, "n": int(ps0.n_matched[0]), "cov": None}
 
     def heat_points(self) -> list[dict]:
         if not self.heat:
@@ -163,16 +180,21 @@ class _Search:
                 for a, b, c in zip(lat, lon, s[keep])]
 
 
-def _uncertainty(r: dict, spacing: float, frame) -> float:
+def _uncertainty(r: dict, spacing: float, frame, mean_alt: float = 0.0) -> float:
+    """Radius (m) the true position is probably within (about 70-90 % in simulations).
+
+    The larger of: the least-squares 1-sigma semi-major axis, scaled up by how many other
+    strikes could explain each matched onset (misassociation risk), and the farthest
+    fine-grid point whose score is within 1.15 of the best (the region of nearly equal fit).
+    """
+    fisher = 0.0
     if r.get("cov") is not None:
         ev = np.linalg.eigvalsh(np.asarray(r["cov"])[:2, :2])
-        return float(max(math.sqrt(max(ev.max(), 0.0)), 0.5 * spacing))
+        fisher = math.sqrt(max(float(ev.max()), 0.0)) * (1.0 + mean_alt)
     res, gy, gu = r["res"], r["gy"], r["gu"]
-    near = res["score"] >= r["score"] - 0.5
-    if not near.any():
-        return float(spacing)
-    d = frame.dist(gy[near], gu[near], r["y"], r["u"])
-    return float(max(np.max(d), spacing))
+    near = res["score"] >= r["score"] - 1.15
+    region = float(np.max(frame.dist(gy[near], gu[near], r["y"], r["u"]))) if near.any() else float(spacing)
+    return float(max(fisher, region, 0.5 * spacing))
 
 
 def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: float, duration_s: float,
@@ -207,6 +229,7 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
     T_prior = None
     bonus = None
     sync_info = None
+    sync_sigma: list[float] = []
     if mode == "known_start":
         tol = max(0.0, float(start_tol_s))
         intervals = [(start_utc - tol, start_utc + tol)]
@@ -219,9 +242,9 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
             mode = "free"
             notes.append("No accepted flash coincides with a catalogued strike, so the clock was searched freely.")
         else:
-            intervals = [(x["T"] - FLASH_TOL_S, x["T"] + FLASH_TOL_S) for x in cands]
+            intervals = [(x["T"] - 2 * x["sigma"], x["T"] + 2 * x["sigma"]) for x in cands]
             bonus = [FLASH_WEIGHT * x["count"] for x in cands]
-            T_prior = None
+            sync_sigma = [x["sigma"] for x in cands]
             notes.append(sync_info["note"])
             search = _Search(prob, region, spacing_m, "flash_sync", report)
     if mode == "free":
@@ -252,7 +275,8 @@ def solve(onsets: list[dict], flashes: list[dict], strikes: list[dict], *, c: fl
         iv = intervals[pk["iv"]] if pk["iv"] >= 0 else intervals[0]
         b = bonus[pk["iv"]] if bonus and pk["iv"] >= 0 else 0.0
         r = search.refine(pk, iv, b)
-        prior = T_prior if mode == "known_start" else ((r["T"], FLASH_TOL_S / 2) if mode == "flash_sync" else None)
+        prior = T_prior if mode == "known_start" else (
+            (0.5 * (iv[0] + iv[1]), sync_sigma[pk["iv"]]) if mode == "flash_sync" else None)
         refined.append(search.polish(r, prior, iv))
     refined.sort(key=lambda r: -r["score"])
     best = refined[0]
@@ -282,10 +306,29 @@ def _empty_result(mode, notes, search, prob) -> dict:
             "flash_matches": [], "ranges": [], "notes": notes}
 
 
+def _ambiguity_radius(search: _Search, best: dict) -> float:
+    """How far from the best point the coarse grid still scores within 1 of the coarse best."""
+    gy, gu, sc = search.heat[0]
+    near = sc >= float(sc.max()) - 1.0
+    if not near.any():
+        return 0.0
+    return float(np.max(search.p.frame.dist(gy[near], gu[near], best["y"], best["u"])))
+
+
 def _result(mode, best, refined, peaks, search, prob, acc_flashes, notes, sa, spacing_m, region, sync_info) -> dict:
     frame = prob.frame
-    unc = _uncertainty(best, best["spacing"], frame)
     m = prob.matches_at(best["y"], best["u"], best["T"])
+    alt = prob.alternatives(best["y"], best["u"], best["T"], m)
+    mean_alt = float(np.mean(alt)) if len(alt) else 0.0
+    unc = _uncertainty(best, best["spacing"], frame, mean_alt)
+    if mean_alt >= AMBIGUOUS_ALTERNATIVES:
+        unc = max(unc, _ambiguity_radius(search, best))
+        notes.append(f"The matches are not distinctive: each onset also fits about {mean_alt:.0f} other catalogued "
+                     f"strike{'s' if round(mean_alt) != 1 else ''} (the storm is too active for the catalogue's "
+                     f"{describe_sigma(sa.sigma_m)} accuracy), so the position is ambiguous over a wide area. "
+                     "A known start time, video flashes or a more accurate catalogue would help.")
+    ew, ns = bbox_size_m(region)
+    unc = min(unc, 0.5 * math.hypot(ew, ns))          # beyond this it just means "anywhere in the region"
     rms = float(math.sqrt(np.mean([x["r"] ** 2 for x in m]))) if m else 0.0
     lat, lon = _latlon(prob, best["y"], best["u"])
     best_doc = {"lat": lat, "lon": lon, "start_utc": round(best["T"], 3), "score": round(best["score"], 3),

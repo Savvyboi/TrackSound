@@ -303,8 +303,8 @@ function CaseRow({ c, onOpen, onDelete }: { c: Case; onOpen: () => void; onDelet
             </span>
           ) : (
             <div className="flex items-center gap-2">
-              <ProgressBar value={view.progress} className="w-24" />
-              <span className="text-xs text-fg-muted tnum">
+              <ProgressBar value={view.progress} className="w-20 shrink-0" />
+              <span className="text-xs whitespace-nowrap text-fg-muted tnum">
                 {view.label} {Math.round(view.progress * 100)}%
               </span>
             </div>

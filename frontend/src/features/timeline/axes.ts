@@ -94,11 +94,15 @@ export function drawTimeAxis(
     ctx.lineTo(x, g.y1 + 4);
     ctx.stroke();
     ctx.fillStyle = th.text;
-    ctx.fillText(fmtRec(t, dec), x, g.y1 + 6);
+    const label = fmtRec(t, dec);
+    const half = ctx.measureText(label).width / 2;
+    ctx.fillText(label, Math.min(Math.max(x, g.x0 - 6 + half), g.W - 2 - half), g.y1 + 6);
     if (clock) {
       ctx.fillStyle = th.faint;
       ctx.font = FONT_SMALL;
-      ctx.fillText(fmtClock(clock.startUtc + t, clock.tz, step < 60 || (clock.startUtc + t) % 60 !== 0), x, g.y1 + 6 + CLOCK_H);
+      const cl = fmtClock(clock.startUtc + t, clock.tz, step < 60 || (clock.startUtc + t) % 60 !== 0);
+      const ch = ctx.measureText(cl).width / 2;
+      ctx.fillText(cl, Math.min(Math.max(x, g.x0 - 6 + ch), g.W - 2 - ch), g.y1 + 6 + CLOCK_H);
       ctx.font = FONT;
     }
   }

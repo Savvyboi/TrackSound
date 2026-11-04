@@ -70,9 +70,9 @@ def create_app(settings: Settings | None = None, job_workers: int = 3) -> FastAP
     async def _bad_value(request: Request, exc: ValueError):
         return JSONResponse({"detail": str(exc)}, status_code=400)
 
-    from .api import aircraft, cases, enf, jobs as jobs_api, lightning, report, weather
-    for r in (cases.router, jobs_api.router, aircraft.router, lightning.router, enf.router, report.router,
-              weather.router):
+    from .api import aircraft, alerts, cases, enf, jobs as jobs_api, lightning, report, weather
+    for r in (cases.router, jobs_api.router, aircraft.router, lightning.router, enf.router, alerts.router,
+              report.router, weather.router):
         app.include_router(r)
 
     web = web_dir()

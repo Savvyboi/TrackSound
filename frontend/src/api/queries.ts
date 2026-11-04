@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClie
 import { api, ApiError } from "./client";
 import type {
   AircraftEvent,
+  AlertsState,
   AircraftSearch,
   Case,
   CandidateCurves,
@@ -43,6 +44,7 @@ export const qk = {
   enfMatch: (id: string, mid: string) => ["enf", id, "match", mid] as const,
   weather: (id: string, date: string | null, region: unknown) => ["weather", id, date, JSON.stringify(region)] as const,
   enfRefs: ["enf-references"] as const,
+  alerts: (id: string) => ["alerts", id] as const,
   gridMap: ["enf-grid-map"] as const,
 };
 
@@ -282,5 +284,16 @@ export function useWeather(c: Case, enabled: boolean) {
     enabled: enabled && !!c.date && !!c.region,
     retry: false,
     staleTime: 30 * 60_000,
+  });
+}
+
+// ---- alerts -----------------------------------------------------------------------------
+
+export function useAlerts(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.alerts(id),
+    queryFn: () => api.get<AlertsState>(`${casePath(id)}/alerts`),
+    enabled,
+    retry: shouldRetry,
   });
 }

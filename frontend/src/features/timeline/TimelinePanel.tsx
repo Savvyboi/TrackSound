@@ -28,9 +28,10 @@ import {
   useEnfMatch,
   useEnvelope,
   useLightning,
+  useSearch,
 } from "../../api/queries";
 import { Button, IconButton } from "../../components/ui/Button";
-import { Segmented, Slider } from "../../components/ui/form";
+import { Segmented, Slider, Switch } from "../../components/ui/form";
 import { EmptyState, Kbd, Spinner, Unavailable } from "../../components/ui/misc";
 import { Popover, usePopover } from "../../components/ui/overlay";
 import { toast } from "../../components/ui/toast";
@@ -104,12 +105,21 @@ function ReadyTimeline() {
   const onsetId = useWs((s) => s.onsetId);
   const flashId = useWs((s) => s.flashId);
   const matchId = useWs((s) => s.matchId);
+  const showOverlays = useWs((s) => s.showOverlays);
+  const showWeak = useWs((s) => s.showWeak);
   const rec = c.recording!;
   const info = rec.spectrogram!;
   const D = caseDuration(c);
 
   const events = useAircraftEvents(c.id);
   const curves = useCandidateCurves(c.id, searchId, rank);
+  const search = useSearch(c.id, searchId);
+  const candLabels = useMemo(() => {
+    const m = new Map<string, string>();
+    const k = search.data?.candidates.find((x) => x.rank === rank);
+    for (const f of k?.flights ?? []) m.set(f.icao, [f.reg ?? f.icao.toUpperCase(), f.type].filter(Boolean).join(" · "));
+    return m;
+  }, [search.data, rank]);
   const lightning = useLightning(c.id, mode === "thunder" || tab === "lightning");
   const enf = useEnf(c.id, mode === "enf");
   const match = useEnfMatch(c.id, mode === "enf" ? matchId : null);
@@ -145,7 +155,10 @@ function ReadyTimeline() {
       selectedEventId,
       checkedEventIds,
       candCurves: rank != null && searchId ? (curves.data?.events ?? null) : null,
+      candLabels,
       pendingFit,
+      showOverlays,
+      showWeak,
       envOverview: envOverview.data ?? null,
       envDetail: detailOn ? (envDetail.data ?? null) : null,
       onsets: lightning.data?.onsets ?? [],
@@ -157,7 +170,7 @@ function ReadyTimeline() {
       enfOverlay: matchId ? (match.data?.overlay ?? null) : null,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, c.id, c.temperature_c, rec.uploaded_at, info, D, clock, tool, events.data, numbers, selectedEventId, checkedEventIds, rank, searchId, curves.data, pendingFit, envOverview.data, envDetail.data, detailOn, lightning.data, onsetId, flashId, enf.data, matchId, match.data],
+    [mode, c.id, c.temperature_c, rec.uploaded_at, info, D, clock, tool, events.data, numbers, selectedEventId, checkedEventIds, rank, searchId, curves.data, candLabels, pendingFit, showOverlays, showWeak, envOverview.data, envDetail.data, detailOn, lightning.data, onsetId, flashId, enf.data, matchId, match.data],
   );
 
   const handlers: Handlers = {
@@ -343,7 +356,12 @@ function DisplaySettings() {
   const c = useCaseData();
   const info = c.recording!.spectrogram!;
   const colormap = useWs((s) => s.colormap);
-  const contrast = useWs((s) => s.contrast);
+  const manual = useWs((s) => s.contrast);
+  const auto = useWs((s) => s.contrastAuto);
+  const autoVals = useWs((s) => s.autoContrast);
+  const contrast = auto && autoVals ? autoVals : manual;
+  const showOverlays = useWs((s) => s.showOverlays);
+  const showWeak = useWs((s) => s.showWeak);
   const lo = info.db_min;
   const hi = info.db_max;
   return (
@@ -364,11 +382,20 @@ function DisplaySettings() {
           </button>
         ))}
       </div>
-      <div className="mt-4 mb-1 flex items-center justify-between">
+      <div className="mt-4 flex flex-col gap-2 border-t border-line pt-3">
+        <Switch checked={showOverlays} onChange={(v) => ws.set({ showOverlays: v })} label={<span className="text-xs">Fitted flyover curves</span>} hint="Drawn as rails either side of the sweep (C)" />
+        <Switch checked={showWeak} onChange={(v) => ws.set({ showWeak: v })} label={<span className="text-xs">Include weak fits</span>} hint="Fits that score about as well as pure noise" />
+      </div>
+      <div className="mt-4 mb-1.5 flex items-center justify-between border-t border-line pt-3">
         <span className="text-2xs font-semibold tracking-wider text-fg-muted uppercase">Contrast</span>
-        <button className="flex items-center gap-1 text-2xs text-fg-faint hover:text-fg" onClick={() => ws.set({ contrast: { lo: 1, hi: 20 } })}>
-          <RotateCcw className="size-3" /> Reset
-        </button>
+        <div className="flex items-center gap-3">
+          {!auto && (
+            <button className="flex items-center gap-1 text-2xs text-fg-faint hover:text-fg" onClick={() => ws.set({ contrastAuto: true })}>
+              <RotateCcw className="size-3" /> Auto
+            </button>
+          )}
+          <Switch checked={auto} onChange={(v) => ws.set({ contrastAuto: v, ...(v ? {} : { contrast: contrast }) })} label={<span className="text-2xs text-fg-muted">Auto</span>} />
+        </div>
       </div>
       <div className="mb-2 h-2 rounded-full" style={{ background: colormapGradient(colormap) }} />
       <label className="flex items-center gap-2 text-xs text-fg-muted">
@@ -379,9 +406,9 @@ function DisplaySettings() {
           max={hi}
           step={0.5}
           value={contrast.lo}
-          onChange={(v) => ws.set({ contrast: { lo: Math.min(v, contrast.hi - 1), hi: contrast.hi } })}
+          onChange={(v) => ws.set({ contrastAuto: false, contrast: { lo: Math.min(v, contrast.hi - 1), hi: contrast.hi } })}
         />
-        <span className="w-12 text-right text-fg tnum">{contrast.lo.toFixed(1)} dB</span>
+        <span className="w-[52px] shrink-0 text-right whitespace-nowrap text-fg tnum">{contrast.lo.toFixed(1)} dB</span>
       </label>
       <label className="mt-1 flex items-center gap-2 text-xs text-fg-muted">
         <span className="w-14">Ceiling</span>
@@ -391,12 +418,13 @@ function DisplaySettings() {
           max={hi}
           step={0.5}
           value={contrast.hi}
-          onChange={(v) => ws.set({ contrast: { lo: contrast.lo, hi: Math.max(v, contrast.lo + 1) } })}
+          onChange={(v) => ws.set({ contrastAuto: false, contrast: { lo: contrast.lo, hi: Math.max(v, contrast.lo + 1) } })}
         />
-        <span className="w-12 text-right text-fg tnum">{contrast.hi.toFixed(1)} dB</span>
+        <span className="w-[52px] shrink-0 text-right whitespace-nowrap text-fg tnum">{contrast.hi.toFixed(1)} dB</span>
       </label>
       <p className="mt-3 text-2xs leading-snug text-fg-faint">
         Levels are whitened dB above each frequency's median, so steady hum is suppressed and passing tones stand out.
+        {auto && " Auto picks the floor just above the visible noise."}
       </p>
     </div>
   );
@@ -462,7 +490,7 @@ function BoxFitCard() {
 
 function SpectrogramHint() {
   return (
-    <div className="pointer-events-none absolute right-3 bottom-3 z-10 max-w-[300px] rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-2xs leading-relaxed text-white/75 backdrop-blur-sm">
+    <div className="pointer-events-none absolute right-5 bottom-9 z-10 max-w-[300px] rounded-lg border border-white/10 bg-black/70 px-3 py-2 text-2xs leading-relaxed text-white/75 backdrop-blur-sm">
       Prop flyovers show as tones sweeping <b className="text-white">down</b> in pitch. Run <b className="text-white">Detect flyovers</b>, or press{" "}
       <Kbd>B</Kbd> and drag a box around a sweep.
     </div>
@@ -503,7 +531,7 @@ function ThunderOverlay({
         </div>
       )}
       {addMode && (
-        <div className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-2xs text-white/85 backdrop-blur-sm">
+        <div className="pointer-events-none absolute bottom-10 left-1/2 z-10 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-3 py-1 text-2xs text-white/85 backdrop-blur-sm">
           Click to add a {addMode === "add-onset" ? "thunder onset" : "lightning flash"} · <Kbd>Esc</Kbd> to finish
         </div>
       )}
@@ -639,7 +667,7 @@ function Overview({ duration, qcCaseId }: { duration: number; qcCaseId: string }
   return (
     <div className="flex h-[22px] shrink-0 items-center gap-2 border-t border-line px-2 pl-[50px]">
       <div
-        className="relative h-3 flex-1 cursor-pointer rounded-[3px] bg-surface-3"
+        className="relative h-3 flex-1 cursor-pointer rounded-[3px] bg-surface-2 ring-1 ring-line ring-inset"
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={() => setDrag(null)}
@@ -649,7 +677,7 @@ function Overview({ duration, qcCaseId }: { duration: number; qcCaseId: string }
           <span key={m.key} className="absolute top-0.5 bottom-0.5 w-[2px] rounded-full opacity-80" style={{ left: `${(m.t / D) * 100}%`, background: m.color }} />
         ))}
         <div
-          className="absolute -top-px -bottom-px rounded-[3px] border border-accent-line bg-accent/15"
+          className="absolute -top-px -bottom-px rounded-[3px] border border-accent-line bg-accent/8"
           style={{ left: `${left}%`, width: `${width}%` }}
         />
         {pb.t != null && pb.state !== "idle" && <span className="absolute -top-0.5 -bottom-0.5 w-px bg-white" style={{ left: `${(pb.t / D) * 100}%` }} />}

@@ -2,7 +2,8 @@
 
 export type BBox = { lat_min: number; lat_max: number; lon_min: number; lon_max: number };
 
-export type StartSource = "user" | "aircraft" | "lightning" | "enf";
+/** "alerts" is sent when adopting a SAME header's time; older servers only accept the first four. */
+export type StartSource = "user" | "aircraft" | "lightning" | "enf" | "alerts";
 
 export type Case = {
   id: string;
@@ -337,4 +338,40 @@ export type Weather = {
   basis: string;
   sound_speed_mps: number | null;
   attribution: string | null;
+};
+
+// ---- alerts (EAS / SAME headers) --------------------------------------------------------
+
+export type SameLocation = {
+  code: string;
+  part: string;
+  fips: string;
+  state: string | null;
+  county: string | null;
+  lat: number | null;
+  lon: number | null;
+};
+
+export type SameHeader = {
+  id: string;
+  t: number;
+  repeats: number;
+  raw: string;
+  originator: string;
+  originator_name: string;
+  event: string;
+  event_name: string;
+  locations: SameLocation[];
+  purge_minutes: number;
+  issued_utc: number;
+  station: string;
+  implied_start_utc: number;
+  confidence: number;
+};
+
+export type AlertsState = {
+  headers: SameHeader[];
+  eom: { t: number }[];
+  scanned_at: number | null;
+  notes: string[];
 };

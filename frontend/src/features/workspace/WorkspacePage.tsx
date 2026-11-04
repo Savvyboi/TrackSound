@@ -149,6 +149,8 @@ function Shortcuts({ caseId }: { caseId: string }) {
         setTab(TABS[Number(k) - 1]);
       } else if (k === "?") {
         ws.set({ showShortcuts: !s.showShortcuts });
+      } else if (k === "c" || k === "C") {
+        ws.set({ showOverlays: !s.showOverlays });
       } else if (k === "o" || k === "O") {
         if (mode === "thunder") ws.set({ tool: s.tool === "add-onset" ? "pan" : "add-onset" });
       }
@@ -168,6 +170,7 @@ const SHORTCUTS: [string[], string][] = [
   [["←", "→"], "Pan (hold Shift for bigger steps)"],
   [["B"], "Box tool: drag around a sweep to fit a flyover (or hold Alt)"],
   [["H"], "Pan tool"],
+  [["C"], "Show or hide fitted flyover curves"],
   [["A", "R"], "Accept / reject the selected flyover"],
   [["O"], "Add thunder onsets by clicking (Lightning tab)"],
   [["R"], "Draw the search region on the map (nothing selected)"],

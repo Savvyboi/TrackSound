@@ -203,7 +203,7 @@ class Problem:
                 i = np.argmax(h, axis=1)
                 v = h[np.arange(len(sel)), i]
                 good = v > 1e-6
-                outT[sel, p] = np.where(good, T_lo + (i + 0.5) * bin_w, np.nan)
+                outT[sel, p] = np.where(good, np.minimum(T_lo + (i + 0.5) * bin_w, T_hi), np.nan)
                 outV[sel, p] = np.where(good, v, 0.0)
                 if p + 1 < n_peaks:
                     h = np.where(np.abs(cols - i[:, None]) <= sep, -np.inf, h)
@@ -324,6 +324,20 @@ class Problem:
             out.append({"k": k, "j": jj, "r": float(r[p]), "d": float(d[p]), "sigma": float(sig[p]), "K": float(Kv[p])})
         out.sort(key=lambda m: self.a[m["k"]])
         return out
+
+    def alternatives(self, y: float, u: float, T: float, matches: list[dict]) -> np.ndarray:
+        """For each match, the soft count of *other* strikes that would explain its onset about
+        as well (sum of their kernels). Values near or above 1 mean the matches are not
+        distinctive: the catalogue is too dense for its timing tolerance."""
+        if not matches:
+            return np.zeros(0)
+        smax = 3.0 * self.sigma_bound(0.0)
+        gy, gu = np.array([y]), np.array([u])
+        pk, pj = self._block_pairs(gy, gu, T, T, smax)
+        d = self._dist(gy, gu, pj)
+        r = self.a[pk][None, :] + T - self.st[pj][None, :] - d / self.c
+        Kv = self._kernel(d, r, pk, pj, 0.0)[0][0]
+        return np.array([float(Kv[(pk == m["k"]) & (pj != m["j"])].sum()) for m in matches])
 
     def polish(self, y: float, u: float, T: float, T_prior: tuple[float, float] | None,
                iters: int = 10) -> tuple[float, float, float, np.ndarray | None, list[dict]]:

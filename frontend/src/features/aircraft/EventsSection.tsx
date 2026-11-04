@@ -40,7 +40,8 @@ export function EventsSection() {
   const [harmonics, setHarmonics] = useState(1);
   const [top, setTop] = useState(12);
   const [starting, setStarting] = useState(false);
-  const [showWeak, setShowWeak] = useState(false);
+  const showWeak = useWs((s) => s.showWeak);
+  const setShowWeak = (f: (v: boolean) => boolean) => ws.set({ showWeak: f(ws.get().showWeak) });
   const all = (events.data ?? []).slice().sort((a, b) => a.t_cpa - b.t_cpa);
   const weak = all.filter((e) => eventQuality(e) === "weak" && e.status !== "accepted" && e.origin !== "manual");
   const collapseWeak = weak.length > 2 && !showWeak;
@@ -215,30 +216,12 @@ function EventRow({
           <QualityBadge q={q} />
           {ev.origin === "manual" && <Badge className="h-4 px-1 text-[10px]">manual</Badge>}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-2xs text-fg-muted tnum">
+        <div className="mt-0.5 flex items-center gap-1.5 text-2xs whitespace-nowrap text-fg-muted tnum">
           <span>{Math.round(ev.v)} m/s</span>
           <span className="text-fg-faint">·</span>
           <span>{fmtDist(ev.d)}</span>
           <span className="text-fg-faint">·</span>
           <span data-tip="Mean whitened dB along the fitted curve">score {ev.score.toFixed(1)}</span>
-          {selected && (
-            <>
-              <span className="text-fg-faint">·</span>
-              <select
-                value={ev.harmonics}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => onHarmonics(Number(e.target.value))}
-                className="h-4 cursor-pointer rounded border border-line-strong bg-surface-2 px-0.5 text-[10px] text-fg outline-none"
-                aria-label="Harmonics"
-              >
-                {[1, 2, 3, 4].map((h) => (
-                  <option key={h} value={h}>
-                    {h} harm.
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
         </div>
       </div>
       <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -262,6 +245,34 @@ function EventRow({
           <Trash2 />
         </IconButton>
       </div>
+      {selected && (
+        <div className="col-span-4 mt-1 ml-[46px] grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 border-t border-accent-line/30 pt-1.5 text-2xs text-fg-muted tnum" onClick={(e) => e.stopPropagation()}>
+          <span className="text-fg-faint">Tone</span>
+          <span>
+            {ev.f_pre.toFixed(1)} → {ev.f_post.toFixed(1)} Hz <span className="text-fg-faint">(approach → recede)</span>
+          </span>
+          <span className="text-fg-faint">Fit window</span>
+          <span>
+            {fmtRec(ev.t_start)} – {fmtRec(ev.t_end)} · band {ev.band[0]}–{ev.band[1]} Hz
+          </span>
+          <span className="text-fg-faint">Harmonics</span>
+          <span className="flex items-center gap-1.5">
+            <select
+              value={ev.harmonics}
+              onChange={(e) => onHarmonics(Number(e.target.value))}
+              className="h-5 cursor-pointer rounded border border-line-strong bg-surface-2 px-1 text-2xs text-fg outline-none"
+              aria-label="Harmonics"
+            >
+              {[1, 2, 3, 4].map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+            <span className="text-fg-faint">{ev.origin === "manual" ? "fitted by hand" : "detected"}</span>
+          </span>
+        </div>
+      )}
     </div>
   );
 }

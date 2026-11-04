@@ -143,3 +143,17 @@ def test_manual_fit(client, case):
     ev = next(e for e in client.get(f"/api/cases/{cid}/aircraft/events").json() if e["id"] == eid)
     assert ev["origin"] == "manual" and ev["status"] == "accepted"
     assert abs(ev["t_cpa"] - h) < 10 and abs(ev["f0"] - p.f0) < 5
+
+
+def test_silence_filter_switches_off_in_a_busy_sky():
+    from tracksound.api.aircraft import SearchBody, _silence_allowed
+    evs = {"a": {"id": "a", "t_cpa": 100.0, "status": "accepted", "quality": "strong"},
+           "b": {"id": "b", "t_cpa": 700.0, "status": "accepted", "quality": "strong"},
+           "w": {"id": "w", "t_cpa": 400.0, "status": "candidate", "quality": "weak"},
+           "r": {"id": "r", "t_cpa": 450.0, "status": "rejected", "quality": "strong"}}
+    body = SearchBody(mode="blind", events=["a", "b"])
+    assert _silence_allowed(body, evs) == (True, None)          # weak and rejected events don't count
+    evs["s"] = {"id": "s", "t_cpa": 500.0, "status": "candidate", "quality": "strong"}
+    on, note = _silence_allowed(body, evs)
+    assert on is False and "1 other flyover" in note
+    assert _silence_allowed(SearchBody(mode="blind", events=["a", "b"], silence=False), evs) == (False, None)

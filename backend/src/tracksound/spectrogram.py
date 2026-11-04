@@ -1,4 +1,4 @@
-"""The case spectrogram: built once per upload, cached in memory, served to the browser as tiles.
+"""The case spectrogram (10-450 Hz): built once per upload, cached in memory, served to the browser as tiles.
 
 Scoring always uses the float32 whitened spectrogram (``spectrogram.npz``, dopplertrack's
 format). The browser gets a uint8 display pyramid: level 0 has one column per STFT frame,
@@ -18,7 +18,8 @@ DB_MIN = -10.0
 DB_MAX = 30.0
 TILE_FRAMES = 1024
 
-SPEC_PARAMS = dict(nperseg=8192, hop_s=0.25, fmin=40.0, fmax=450.0, whiten_window_s=600.0)
+# 10 Hz floor: helicopter main rotors have blade-pass tones at about 10-40 Hz (props are 60-400 Hz)
+SPEC_PARAMS = dict(nperseg=8192, hop_s=0.25, fmin=10.0, fmax=450.0, whiten_window_s=600.0)
 
 
 def build(x: np.ndarray, sr: int, spec_path: Path, tiles_dir: Path, progress=None) -> dict:

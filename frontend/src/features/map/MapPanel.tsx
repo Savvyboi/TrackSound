@@ -45,6 +45,8 @@ export function MapPanel() {
   const [basemap, setBasemapState] = useState<BasemapId>(() => loadPref<BasemapId>("ts.basemap", "auto"));
   const [offline, setOffline] = useState<null | "style" | "tiles">(null);
   const styleOk = useRef(false);
+  // set on "style.load"; isStyleLoaded() is false while tiles load, which would skip overlay updates
+  const styleReady = useRef(false);
   const tileErrors = useRef(0);
   const effective: BasemapId = offline === "style" ? "plain" : basemap;
   const dark = isDarkBasemap(effective, theme);
@@ -165,6 +167,7 @@ export function MapPanel() {
     map.touchZoomRotate.disableRotation();
     map.on("style.load", () => {
       styleOk.current = true;
+      styleReady.current = true;
       syncState.current = newSyncState();
       try {
         syncOverlays(map, overlayRef.current, syncState.current);
@@ -207,6 +210,7 @@ export function MapPanel() {
       firstStyle.current = false;
     } else {
       styleOk.current = false;
+      styleReady.current = false;
       tileErrors.current = 0;
       map.setStyle(styleFor(effective, theme), { diff: false });
     }
@@ -221,7 +225,7 @@ export function MapPanel() {
   // overlays
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !styleReady.current) return;
     try {
       syncOverlays(map, overlay, syncState.current);
     } catch (e) {
@@ -434,7 +438,10 @@ export function MapPanel() {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-surface-2">
-      <div ref={el} className="absolute inset-0" data-testid="map" />
+      {/* MapLibre's own CSS makes its container position:relative, so size it from a wrapper */}
+      <div className="absolute inset-0">
+        <div ref={el} className="h-full w-full" data-testid="map" />
+      </div>
       <MapToolbar basemap={basemap} setBasemap={setBasemap} effective={effective} hasGrid={!gridMap.error} />
       {mapTool !== "none" && (
         <div className="pointer-events-none absolute top-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line-strong bg-surface/95 px-3 py-1.5 text-xs text-fg shadow-pop">

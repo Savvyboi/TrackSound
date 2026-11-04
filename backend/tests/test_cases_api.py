@@ -21,7 +21,16 @@ def test_case_crud(client):
 
     assert client.delete(f"/api/cases/{c['id']}").status_code == 204
     assert client.get(f"/api/cases/{c['id']}").status_code == 404
-    assert client.get("/api/cases/../../etc").status_code == 404
+    store = client.app.state.store
+    import pytest
+    from tracksound.store import NotFound
+    for bad in ("../etc", "..", ".hidden", "a/b", ""):
+        with pytest.raises(NotFound):
+            store.case_dir(bad)
+    with pytest.raises(ValueError):
+        store.path(c["id"], "../../outside.json")
+    assert client.get("/api/cases/c_doesnotexist").status_code == 404
+    assert client.get("/api/no-such-endpoint").status_code == 404
 
 
 def test_upload_builds_spectrogram_and_tiles(make_case, client):

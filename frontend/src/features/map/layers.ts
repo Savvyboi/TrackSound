@@ -58,7 +58,7 @@ const sid = (k: SourceKey) => `ts-${k}`;
 
 /** Score heat ramp (dark violet → magenta → orange → pale yellow), by normalised score `u`. */
 const HEAT_COLOR = ["interpolate", ["linear"], ["get", "u"], 0, "#3b0f70", 0.4, "#8c2981", 0.65, "#de4968", 0.85, "#fe9f6d", 1, "#fcfdbf"];
-const HEAT_OPACITY = ["interpolate", ["linear"], ["get", "u"], 0, 0.06, 0.5, 0.35, 0.8, 0.7, 1, 0.92];
+const HEAT_OPACITY = ["interpolate", ["linear"], ["get", "u"], 0, 0.28, 0.5, 0.5, 0.8, 0.75, 1, 0.95];
 
 function radiusExpr(r0: number, minPx: number) {
   // radius doubles per zoom level (one grid cell on the ground), but never smaller than minPx
@@ -107,7 +107,7 @@ const LAYERS: Layer[] = [
       type: "circle",
       source: sid("aHeat"),
       paint: {
-        "circle-radius": radiusExpr(d.aHeatR0, 1.6) as never,
+        "circle-radius": radiusExpr(d.aHeatR0, 3) as never,
         "circle-color": HEAT_COLOR as never,
         "circle-opacity": HEAT_OPACITY as never,
         "circle-blur": 0.15,
@@ -122,7 +122,7 @@ const LAYERS: Layer[] = [
       type: "circle",
       source: sid("lHeat"),
       paint: {
-        "circle-radius": radiusExpr(d.lHeatR0, 1.6) as never,
+        "circle-radius": radiusExpr(d.lHeatR0, 3) as never,
         "circle-color": HEAT_COLOR as never,
         "circle-opacity": HEAT_OPACITY as never,
         "circle-blur": 0.15,
@@ -287,7 +287,7 @@ function setProp(map: MLMap, st: SyncState, layer: string, kind: "paint" | "filt
   if (st.props.get(key) === json) return;
   st.props.set(key, json);
   if (kind === "filter") map.setFilter(layer, value as never);
-  else map.setPaintProperty(layer, prop, value as never);
+  else map.setPaintProperty(layer, prop as never, value as never);
 }
 
 function enfColor(d: OverlayData) {
@@ -302,7 +302,6 @@ function enfOpacity(d: OverlayData) {
 
 /** Make the map's overlay sources and layers match `d` (safe to call after a style swap). */
 export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
-  if (!map.isStyleLoaded() && !map.getStyle()) return;
   for (const k of SOURCES) {
     const id = sid(k);
     const data = (d[k] as FeatureCollection | null) ?? { type: "FeatureCollection", features: [] };
@@ -342,8 +341,8 @@ export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
   setProp(map, st, "ts-flights-sel", "filter", "", ["==", ["get", "idx"], d.flightSel ?? -1]);
   setProp(map, st, "ts-flights", "paint", "line-color", d.dark ? "#7aa7ff" : "#2563eb");
   setProp(map, st, "ts-flights", "paint", "line-opacity", d.flightHl.length || d.flightSel != null ? 0.28 : 0.5);
-  setProp(map, st, "ts-aheat", "paint", "circle-radius", radiusExpr(d.aHeatR0, 1.6));
-  setProp(map, st, "ts-lheat", "paint", "circle-radius", radiusExpr(d.lHeatR0, 1.6));
+  setProp(map, st, "ts-aheat", "paint", "circle-radius", radiusExpr(d.aHeatR0, 3));
+  setProp(map, st, "ts-lheat", "paint", "circle-radius", radiusExpr(d.lHeatR0, 3));
   setProp(map, st, "ts-enf-fill", "paint", "fill-color", enfColor(d));
   setProp(map, st, "ts-enf-fill", "paint", "fill-opacity", enfOpacity(d));
   setProp(map, st, "ts-land-fill", "paint", "fill-color", d.dark ? "#151b24" : "#f8fafc");

@@ -3,13 +3,13 @@ import type { ColormapName } from "../lib/colormap";
 import { clamp } from "../lib/format";
 import { createStore, loadPref, savePref } from "../lib/store";
 
-export type Tab = "setup" | "aircraft" | "lightning" | "enf" | "summary";
+export type Tab = "setup" | "aircraft" | "lightning" | "enf" | "alerts" | "summary";
 export type TimelineMode = "spectrogram" | "thunder" | "enf";
 export type Tool = "pan" | "box" | "add-onset" | "add-flash";
 export type MapTool = "none" | "region" | "pick-point";
 export type Speed = 1 | 4 | 8;
 
-export const TABS: Tab[] = ["setup", "aircraft", "lightning", "enf", "summary"];
+export const TABS: Tab[] = ["setup", "aircraft", "lightning", "enf", "alerts", "summary"];
 
 export function modeForTab(tab: Tab): TimelineMode {
   if (tab === "lightning") return "thunder";
@@ -40,19 +40,23 @@ export type Playback = {
 type Prefs = {
   colormap: ColormapName;
   contrast: { lo: number; hi: number };
+  contrastAuto: boolean;
   layers: Layers;
   speed: Speed;
   followPlayhead: boolean;
   flightsDuringOnly: boolean;
+  showOverlays: boolean;
 };
 
 const DEFAULT_PREFS: Prefs = {
   colormap: "magma",
-  contrast: { lo: 1, hi: 20 },
+  contrast: { lo: 3, hi: 20 },
+  contrastAuto: true,
   layers: { region: true, flights: true, aircraftHeat: true, candidates: true, strikes: true, lightning: true, enfGrid: false },
   speed: 4,
   followPlayhead: true,
   flightsDuringOnly: false,
+  showOverlays: true,
 };
 
 const prefs = { ...DEFAULT_PREFS, ...loadPref<Partial<Prefs>>("ts.prefs", {}) };
@@ -76,6 +80,7 @@ export type WorkspaceState = Prefs & {
   flashId: string | null;
   solveId: string | null;
   matchId: string | null;
+  alertId: string | null;
   hoverT: number | null;
   pickPoint: { lat: number; lon: number } | null;
   searchMode: "blind" | "point" | "single";
@@ -84,6 +89,10 @@ export type WorkspaceState = Prefs & {
   boxDraft: BoxDraft | null;
   pendingFit: BoxDraft | null;
   showShortcuts: boolean;
+  /** contrast window chosen automatically from the visible spectrogram (dB) */
+  autoContrast: { lo: number; hi: number } | null;
+  /** show flyover fits whose score is close to pure noise */
+  showWeak: boolean;
 };
 
 const INITIAL: Omit<WorkspaceState, keyof Prefs> = {
@@ -104,6 +113,7 @@ const INITIAL: Omit<WorkspaceState, keyof Prefs> = {
   flashId: null,
   solveId: null,
   matchId: null,
+  alertId: null,
   hoverT: null,
   pickPoint: null,
   searchMode: "blind",
@@ -112,6 +122,8 @@ const INITIAL: Omit<WorkspaceState, keyof Prefs> = {
   boxDraft: null,
   pendingFit: null,
   showShortcuts: false,
+  autoContrast: null,
+  showWeak: false,
 };
 
 export const ws = createStore<WorkspaceState>({ ...INITIAL, ...prefs });
@@ -123,10 +135,12 @@ ws.subscribe(() => {
   const p: Prefs = {
     colormap: s.colormap,
     contrast: s.contrast,
+    contrastAuto: s.contrastAuto,
     layers: s.layers,
     speed: s.speed,
     followPlayhead: s.followPlayhead,
     flightsDuringOnly: s.flightsDuringOnly,
+    showOverlays: s.showOverlays,
   };
   const key = JSON.stringify(p);
   if (key !== lastPrefs) {

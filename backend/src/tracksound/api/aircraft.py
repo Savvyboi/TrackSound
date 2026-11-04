@@ -33,8 +33,8 @@ class DetectBody(BaseModel):
 
     @model_validator(mode="after")
     def _band(self):
-        if not (40 <= self.band[0] < self.band[1] <= 450):
-            raise ValueError("band must lie within 40-450 Hz with low < high")
+        if not (10 <= self.band[0] < self.band[1] <= 450):
+            raise ValueError("band must lie within 10-450 Hz with low < high")
         return self
 
 
@@ -49,8 +49,8 @@ class FitBody(BaseModel):
     def _ranges(self):
         if self.t_end - self.t_start < 20:
             raise ValueError("the fit window must be at least 20 s long")
-        if not (40 <= self.f_lo < self.f_hi <= 450):
-            raise ValueError("the frequency band must lie within 40-450 Hz with low < high")
+        if not (10 <= self.f_lo < self.f_hi <= 450):
+            raise ValueError("the frequency band must lie within 10-450 Hz with low < high")
         return self
 
 
@@ -328,6 +328,24 @@ def _single_time(case: dict, ev: dict, body: SearchBody) -> float:
     return float(case["start_utc"]) + float(ev["t_cpa"])
 
 
+def _silence_allowed(body: SearchBody, evs: dict[str, dict]) -> tuple[bool, str | None]:
+    """The 'silence' filter drops candidates that would have heard another close prop between
+    the two events. That is right for a quiet sky, and wrong when the recording itself shows
+    other flyovers in between (a busy sky): then the true location always fails it. On the
+    eagle-cam day that filter pushed the right answer out of the top 5; without it the search
+    came within 51 m."""
+    if body.mode == "single" or not body.silence:
+        return False, None
+    a, b = sorted((evs[body.events[0]]["t_cpa"], evs[body.events[1]]["t_cpa"]))
+    between = [e for e in evs.values() if e["id"] not in body.events and e.get("status") != "rejected"
+               and e.get("quality", "strong") != "weak" and a + 40 < e["t_cpa"] < b - 40]
+    if between:
+        return False, (f"{len(between)} other flyover(s) were detected between the two events, so the filter that "
+                       "requires no other aircraft in between was switched off. Adjacent events usually give a "
+                       "clearer result.")
+    return True, None
+
+
 @router.post("/search/estimate")
 def search_estimate(case_id: str, body: SearchBody, store: Store = Depends(get_store)):
     case = store.get_case(case_id)
@@ -356,8 +374,10 @@ def run_search(case_id: str, body: SearchBody, store: Store = Depends(get_store)
     sid = new_id("as")
     request = body.model_dump()
 
+    silence, silence_note = _silence_allowed(body, evs)
+
     def work(ctx: JobContext):
-        notes: list[str] = []
+        notes: list[str] = [silence_note] if silence_note else []
         inp = srch.Inputs(spectrogram.load(store.spectrogram_path(case_id)), traces, c, _elevation(body.use_dem, notes), notes)
         if body.mode == "single":
             res = srch.single_event_search(inp, evs[body.events[0]], case["region"], t_single, body.spacing_m,
@@ -366,7 +386,7 @@ def run_search(case_id: str, body: SearchBody, store: Store = Depends(get_store)
             res = srch.two_event_search(inp, evs[body.events[0]], evs[body.events[1]],
                                         None if body.mode == "point" else case["region"], body.spacing_m,
                                         body.point.model_dump() if body.point else None, body.tol_s or 6.0,
-                                        body.silence, progress=ctx.progress)
+                                        silence, progress=ctx.progress)
         _save_search(store, case_id, sid, body.mode, None, request, res)
         best = res.candidates[0] if res.candidates else None
         return {"search_id": sid, "n_candidates": len(res.candidates), "best": best and {k: best[k] for k in ("lat", "lon", "score")}}

@@ -7,7 +7,14 @@ export type RasterResult = {
   /** True when every visible column was drawn from the chosen level. */
   complete: boolean;
   level: number;
+  /** Histogram of the drawn byte values (for automatic contrast). */
+  hist: Uint32Array;
 };
+
+// per-pixel state: 0..255 = byte value, 256 = outside the data, 257 = not loaded yet
+const OUTSIDE = 256;
+const LOADING = 257;
+let pix = new Uint16Array(0);
 
 let colMax = new Uint8Array(1024);
 let rowLo = new Int32Array(512);
@@ -19,7 +26,6 @@ let rowHi = new Int32Array(512);
  * Columns with no loaded tile fall back to a coarser cached level, else `loading`.
  */
 export function rasterize(
-  out: Uint32Array,
   w: number,
   h: number,
   info: SpectrogramInfo,
@@ -28,10 +34,9 @@ export function rasterize(
   t1: number,
   fLo: number,
   fHi: number,
-  lut: Uint32Array,
-  background: number,
-  loading: number,
 ): RasterResult {
+  if (pix.length < w * h) pix = new Uint16Array(w * h);
+  const hist = new Uint32Array(256);
   const span = t1 - t0;
   const z = chooseLevel(info, span, w);
   const tf = info.tile_frames;
@@ -95,7 +100,7 @@ export function rasterize(
     let kB = Math.ceil(frameF(tb));
     if (kB <= kA) kB = kA + 1;
     if (kB <= 0 || kA >= info.n_frames || binMax < 0) {
-      for (let y = 0; y < h; y++) out[y * w + x] = background;
+      for (let y = 0; y < h; y++) pix[y * w + x] = OUTSIDE;
       continue;
     }
     const fa = Math.max(0, kA);
@@ -123,7 +128,7 @@ export function rasterize(
     }
     if (lvl < 0) {
       complete = false;
-      for (let y = 0; y < h; y++) out[y * w + x] = rowHi[y] < rowLo[y] ? background : loading;
+      for (let y = 0; y < h; y++) pix[y * w + x] = rowHi[y] < rowLo[y] ? OUTSIDE : LOADING;
       continue;
     }
     if (lvl !== z) complete = false;
@@ -158,16 +163,39 @@ export function rasterize(
       const lo = rowLo[y];
       const hi = rowHi[y];
       if (hi < lo) {
-        out[y * w + x] = background;
+        pix[y * w + x] = OUTSIDE;
         continue;
       }
       let v = colMax[lo];
       for (let b = lo + 1; b <= hi; b++) if (colMax[b] > v) v = colMax[b];
-      out[y * w + x] = lut[v];
+      pix[y * w + x] = v;
+      hist[v]++;
     }
   }
   cache.touch([...touched]);
-  return { wanted, complete, level: z };
+  return { wanted, complete, level: z, hist };
+}
+
+/** Second pass: map the rasterized bytes through a colour LUT into packed RGBA. */
+export function paint(out: Uint32Array, n: number, lut: Uint32Array, background: number, loading: number) {
+  for (let i = 0; i < n; i++) {
+    const v = pix[i];
+    out[i] = v < 256 ? lut[v] : v === OUTSIDE ? background : loading;
+  }
+}
+
+/** Byte value at a percentile of a histogram. */
+export function histPercentile(hist: Uint32Array, p: number): number | null {
+  let total = 0;
+  for (let i = 0; i < 256; i++) total += hist[i];
+  if (!total) return null;
+  const target = total * p;
+  let acc = 0;
+  for (let i = 0; i < 256; i++) {
+    acc += hist[i];
+    if (acc >= target) return i;
+  }
+  return 255;
 }
 
 /** dB value under a point, from whatever tile is cached (for the hover readout). */

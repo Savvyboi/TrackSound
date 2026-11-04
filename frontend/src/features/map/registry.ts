@@ -6,6 +6,8 @@ let current: MLMap | null = null;
 
 export function registerMap(m: MLMap | null) {
   current = m;
+  // handy for debugging from the browser console
+  (window as unknown as { __trackSoundMap?: MLMap | null }).__trackSoundMap = m;
 }
 
 /** The visible map area as a region, or null when no map is shown. */

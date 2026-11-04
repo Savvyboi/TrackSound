@@ -16,6 +16,8 @@ from .catalogue import StrikeArrays
 from .geo import LocalFrame, frame_for_bbox, in_bbox
 
 MAX_VOTES = 3_000_000
+SINGLE_SIGMA_S = 0.1      # one flash vs one strike time (video frame, flash duration, catalogue timing)
+MIN_SIGMA_S = 0.02
 
 
 def _counts(flash_t: np.ndarray, S: np.ndarray, cand: np.ndarray, tol: float) -> np.ndarray:
@@ -44,7 +46,11 @@ def _refine(flash_t: np.ndarray, S: np.ndarray, T: float, tol: float) -> tuple[f
 
 def sync_candidates(flash_t: np.ndarray, sa: StrikeArrays, tol: float, region: dict, max_range_m: float,
                     max_cands: int = 40, date: str | None = None) -> tuple[list[dict], dict]:
-    """Candidate clocks ``[{T, count, rms}]`` (best first) and ``{note, best_count}``."""
+    """Candidate clocks ``[{T, count, rms, sigma}]`` (best first) and ``{note, best_count}``.
+
+    ``sigma`` is the clock's uncertainty from the matched flashes (their spread over sqrt(n-1),
+    at least 20 ms; 0.1 s when a single flash is matched).
+    """
     flash_t = np.sort(np.asarray(flash_t, dtype=np.float64))
     S = sa.t
     if len(flash_t) == 0 or len(S) == 0:
@@ -67,16 +73,15 @@ def sync_candidates(flash_t: np.ndarray, sa: StrikeArrays, tol: float, region: d
     best_count = int(count.max()) if len(count) else 0
     out: list[dict] = []
     if best_count >= 2:
+        # every offset with (nearly) the best count, one per cluster, ranked by count then spread
         floor = max(2, best_count - 1)
-        order = np.argsort(-count, kind="stable")
-        for i in order:
-            if count[i] < floor or len(out) >= min(max_cands, 6):
-                break
+        keep = np.flatnonzero(count >= floor)
+        for i in keep[np.argsort(-count[keep], kind="stable")]:
             T, n, rms = _refine(flash_t, S, float(cand[i]), tol)
-            if any(abs(T - o["T"]) <= 2 * tol for o in out):
-                continue
-            out.append({"T": T, "count": n, "rms": rms})
+            if n >= floor and not any(abs(T - o["T"]) <= 2 * tol for o in out):
+                out.append({"T": T, "count": n, "rms": rms, "sigma": max(MIN_SIGMA_S, rms / math.sqrt(n - 1))})
         out.sort(key=lambda o: (-o["count"], o["rms"]))
+        out = out[:min(max_cands, 6)]
         b = out[0]
         note = (f"Clock from video flashes: {b['count']} of {len(flash_t)} accepted flashes coincide with catalogued "
                 f"strikes (spread {b['rms'] * 1000:.0f} ms).")
@@ -95,7 +100,7 @@ def sync_candidates(flash_t: np.ndarray, sa: StrikeArrays, tol: float, region: d
             T = float(S[j] - f)
             if any(abs(T - o["T"]) <= 2 * tol for o in out):
                 continue
-            out.append({"T": T, "count": 1, "rms": 0.0})
+            out.append({"T": T, "count": 1, "rms": 0.0, "sigma": SINGLE_SIGMA_S})
             if len(out) >= max_cands:
                 break
         if len(out) >= max_cands:

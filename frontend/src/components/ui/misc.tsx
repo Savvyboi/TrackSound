@@ -40,7 +40,7 @@ export function ProgressBar({
   );
 }
 
-type Tone = "neutral" | "accent" | "ok" | "warn" | "danger" | "info" | "aircraft" | "lightning" | "enf" | "user";
+type Tone = "neutral" | "accent" | "ok" | "warn" | "danger" | "info" | "aircraft" | "lightning" | "enf" | "alerts" | "user";
 
 const TONE: Record<Tone, string> = {
   neutral: "bg-surface-3 text-fg-muted border-line-strong",
@@ -52,6 +52,7 @@ const TONE: Record<Tone, string> = {
   aircraft: "bg-src-aircraft/10 text-src-aircraft border-src-aircraft/25",
   lightning: "bg-src-lightning/10 text-src-lightning border-src-lightning/25",
   enf: "bg-src-enf/10 text-src-enf border-src-enf/25",
+  alerts: "bg-src-alerts/10 text-src-alerts border-src-alerts/25",
   user: "bg-src-user/10 text-src-user border-src-user/25",
 };
 
