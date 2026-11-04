@@ -1,6 +1,7 @@
 # PyInstaller spec for the standalone TrackSound app.
 # Build (from backend/):  uv run --group bundle pyinstaller packaging/tracksound.spec --noconfirm
 # Output: dist/TrackSound/ (a folder with the TrackSound executable and its libraries).
+import os
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
@@ -33,6 +34,6 @@ exe = EXE(
     exclude_binaries=True,
     name="TrackSound",
     console=True,                 # the window shows where TrackSound runs; closing it stops the server
-    icon="icon.ico" if sys.platform == "win32" else None,
+    icon=os.path.join(SPECPATH, "icon.ico") if sys.platform == "win32" else None,   # noqa: F821 (SPECPATH: set by PyInstaller)
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="TrackSound")
