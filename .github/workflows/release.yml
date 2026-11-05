@@ -106,14 +106,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      # only the apps and the Python package: the "web" artifact is a folder of UI files
       - uses: actions/download-artifact@v4
         with:
+          pattern: app-*
           path: out
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: out
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la out
-          gh release create "$GITHUB_REF_NAME" out/* \
+          find out -maxdepth 1 -type f -print0 | xargs -0 gh release create "$GITHUB_REF_NAME" \
             --title "TrackSound $GITHUB_REF_NAME" --notes-file .github/release-notes.md
