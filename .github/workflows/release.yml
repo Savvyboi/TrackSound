@@ -2,12 +2,18 @@ name: Release
 
 # Builds the downloadable apps and the Python package.
 # - On a version tag (v1.2.3): builds everything and publishes a GitHub Release with the files.
-# - Run it by hand (Actions -> Release -> Run workflow) to build and test without releasing;
-#   the files are then attached to the workflow run as artifacts.
+# - Run it by hand (Actions -> Release -> Run workflow):
+#   - with a version (1.2.3): the same, and the release creates the tag v1.2.3 on that commit;
+#   - without one: builds and tests only; the files are attached to the workflow run as artifacts.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, e.g. 1.2.3 (must match backend/pyproject.toml). Leave empty to build and test only."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -99,7 +105,7 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.version != '')
     needs: [wheel, app]
     runs-on: ubuntu-latest
     permissions:
@@ -119,7 +125,19 @@ jobs:
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="v${INPUT_VERSION#v}"
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' backend/pyproject.toml | head -n 1)
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Release $tag does not match version \"$version\" in backend/pyproject.toml"
+            exit 1
+          fi
           ls -la out
-          find out -maxdepth 1 -type f -print0 | xargs -0 gh release create "$GITHUB_REF_NAME" \
-            --title "TrackSound $GITHUB_REF_NAME" --notes-file .github/release-notes.md
+          # --target is used only when the tag does not exist yet (a release started by hand)
+          find out -maxdepth 1 -type f -print0 | xargs -0 gh release create "$tag" --target "$GITHUB_SHA" \
+            --title "TrackSound $tag" --notes-file .github/release-notes.md

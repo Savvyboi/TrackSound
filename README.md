@@ -141,8 +141,9 @@ You need Python 3.12+ with [uv](https://docs.astral.sh/uv/) and Node.js 22+.
   - `npm run build` writes the UI into the Python package (`backend/src/tracksound/web`).
   - Commit the build with your UI changes; CI checks it is up to date.
 - **Standalone apps:** `cd backend && uv run --group bundle pyinstaller packaging/tracksound.spec`.
-  - Push a tag `vX.Y.Z` to build the Windows, Mac and Linux apps on GitHub Actions, smoke-test
-    them and publish a release (`.github/workflows/release.yml`).
+  - To publish a release, push a tag `vX.Y.Z`, or run the Release workflow on GitHub with the
+    version (it creates the tag). It builds the Windows, Mac and Linux apps, smoke-tests them
+    and publishes them (`.github/workflows/release.yml`).
 - **API contract:** [docs/API.md](docs/API.md). Live API docs are at `/api/docs` while the
   server runs.
 - **Plan and roadmap:** [docs/PLAN.md](docs/PLAN.md).
