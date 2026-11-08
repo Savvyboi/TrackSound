@@ -102,8 +102,14 @@ function Checklist({ c }: { c: Case }) {
 
 type SaveFn = (p: CasePatch, what?: string) => void;
 
+/** A full date with a 4-digit year from 1900 on (a year being typed reads as 0002, 0020, 0202...). */
+const completeDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 1900;
+
 function DateField({ c, save }: { c: Case; save: SaveFn }) {
   const startDay = c.start_utc != null ? fmtDateIso(c.start_utc, "UTC") : null;
+  // typed value, kept locally: saving every keystroke wrote half-typed years back into the field
+  const [value, setValue] = useState(c.date ?? "");
+  useEffect(() => setValue(c.date ?? ""), [c.date]);
   return (
     <Field
       label="Recording date (UTC day)"
@@ -114,10 +120,17 @@ function DateField({ c, save }: { c: Case; save: SaveFn }) {
       <Input
         id="case-date"
         type="date"
-        value={c.date ?? ""}
+        value={value}
         onChange={(e) => {
           const v = e.target.value;
-          if (v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v)) save({ date: v || null }, "the date");
+          setValue(v);
+          if (completeDate(v) && v !== c.date) save({ date: v }, "the date");
+        }}
+        onBlur={(e) => {
+          const el = e.currentTarget;
+          // cleared on purpose (not a half-typed date, which also reads as "")
+          if (el.value === "" && !el.validity.badInput && c.date) save({ date: null }, "the date");
+          else if (!completeDate(el.value)) setValue(c.date ?? "");
         }}
       />
       {startDay && c.date && startDay !== c.date && (
@@ -174,7 +187,10 @@ function RegionField({ c, save }: { c: Case; save: SaveFn }) {
   const mapTool = useWs((s) => s.mapTool);
   const r = c.region;
   const [draft, setDraft] = useState<Partial<BBox>>(r ?? {});
-  useEffect(() => setDraft(c.region ?? {}), [c.region]);
+  // compare by value: a refetched case has a new region object and would wipe half-typed edits
+  const regionKey = JSON.stringify(c.region ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setDraft(c.region ?? {}), [regionKey]);
   const set = (k: keyof BBox, v: number | null) => {
     const next = { ...draft, [k]: v ?? undefined };
     setDraft(next);
@@ -482,12 +498,6 @@ function RecordingInfo({ c }: { c: Case }) {
   );
 }
 
-/** Flag emoji from an alpha-2 code ("PT" → 🇵🇹); empty for other codes. */
-function flag(code: string): string {
-  if (!/^[A-Za-z]{2}$/.test(code)) return "";
-  return String.fromCodePoint(...[...code.toUpperCase()].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
-}
-
 /** "Portugal · 50 Hz · Continental Europe grid". */
 export function countryHint(k: CountrySummary): string {
   const parts = [k.name];
@@ -522,10 +532,7 @@ function CountriesField({ c, save }: { c: Case; save: SaveFn }) {
                   {code}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-fg">
-                    <span className="mr-1">{flag(code)}</span>
-                    {k?.name ?? code}
-                  </div>
+                  <div className="truncate text-sm font-medium text-fg">{k?.name ?? code}</div>
                   {k && (
                     <div className="truncate text-2xs text-fg-muted tnum" title={countryHint(k)}>
                       {countryHint(k).split(" · ").slice(1).join(" · ")} · {fmtArea(k.area_km2)}

@@ -29,6 +29,7 @@ export type OverlayData = {
     land: boolean;
     enfGrid: boolean;
     region: boolean;
+    draft: boolean;
     aHeat: boolean;
     flights: boolean;
     cand: boolean;
@@ -112,7 +113,7 @@ const LAYERS: Layer[] = [
   {
     id: "ts-region-fill",
     group: "region",
-    spec: () => ({ id: "ts-region-fill", type: "fill", source: sid("region"), paint: { "fill-color": "#2dd4bf", "fill-opacity": 0.05 } }),
+    spec: (d) => ({ id: "ts-region-fill", type: "fill", source: sid("region"), paint: { "fill-color": regionColor(d), "fill-opacity": 0.06 } }),
   },
   {
     id: "ts-aheat",
@@ -280,26 +281,38 @@ const LAYERS: Layer[] = [
   {
     id: "ts-region-line",
     group: "region",
-    spec: () => ({
+    spec: (d) => ({
       id: "ts-region-line",
       type: "line",
       source: sid("region"),
-      paint: { "line-color": "#2dd4bf", "line-width": 2, "line-opacity": 0.95 },
+      paint: { "line-color": regionColor(d), "line-width": 2, "line-opacity": 0.95 },
+    }),
+  },
+  // the rectangle being drawn: always shown (even with the region layer off), with a halo so it
+  // stands out on light, dark and satellite maps
+  {
+    id: "ts-draft-fill",
+    group: "draft",
+    spec: (d) => ({ id: "ts-draft-fill", type: "fill", source: sid("regionDraft"), paint: { "fill-color": regionColor(d), "fill-opacity": 0.14 } }),
+  },
+  {
+    id: "ts-draft-halo",
+    group: "draft",
+    spec: (d) => ({
+      id: "ts-draft-halo",
+      type: "line",
+      source: sid("regionDraft"),
+      paint: { "line-color": d.dark ? "#06080c" : "#ffffff", "line-width": 5, "line-opacity": 0.85 },
     }),
   },
   {
-    id: "ts-draft-fill",
-    group: "region",
-    spec: () => ({ id: "ts-draft-fill", type: "fill", source: sid("regionDraft"), paint: { "fill-color": "#2dd4bf", "fill-opacity": 0.1 } }),
-  },
-  {
     id: "ts-draft-line",
-    group: "region",
-    spec: () => ({
+    group: "draft",
+    spec: (d) => ({
       id: "ts-draft-line",
       type: "line",
       source: sid("regionDraft"),
-      paint: { "line-color": "#5eead4", "line-width": 2, "line-dasharray": [2, 1.5] },
+      paint: { "line-color": regionColor(d), "line-width": 2.5, "line-dasharray": [2, 1.5] },
     }),
   },
   {
@@ -337,6 +350,10 @@ function setProp(map: MLMap, st: SyncState, layer: string, kind: "paint" | "filt
 
 function flightColor(d: OverlayData) {
   return ["case", ["==", ["get", "heli"], true], d.dark ? "#f0abfc" : "#c026d3", d.dark ? "#7aa7ff" : "#2563eb"];
+}
+
+function regionColor(d: OverlayData) {
+  return d.dark ? "#2dd4bf" : "#0f766e";
 }
 
 function enfColor(d: OverlayData) {
@@ -412,6 +429,11 @@ export function syncOverlays(map: MLMap, d: OverlayData, st: SyncState) {
   setProp(map, st, "ts-lmatch", "paint", "line-color", d.dark ? "#ffffff" : "#0f172a");
   setProp(map, st, "ts-countries-line", "paint", "line-color", d.dark ? "#e2e8f0" : "#334155");
   setProp(map, st, "ts-countries-fill", "paint", "fill-color", d.dark ? "#e2e8f0" : "#334155");
+  setProp(map, st, "ts-region-fill", "paint", "fill-color", regionColor(d));
+  setProp(map, st, "ts-region-line", "paint", "line-color", regionColor(d));
+  setProp(map, st, "ts-draft-fill", "paint", "fill-color", regionColor(d));
+  setProp(map, st, "ts-draft-line", "paint", "line-color", regionColor(d));
+  setProp(map, st, "ts-draft-halo", "paint", "line-color", d.dark ? "#06080c" : "#ffffff");
   const cand = d.dark ? "#67e8f9" : "#0891b2";
   setProp(map, st, "ts-flights-hl", "paint", "line-color", cand);
   setProp(map, st, "ts-cand-links", "paint", "line-color", cand);

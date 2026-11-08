@@ -1,6 +1,6 @@
 [project]
 name = "tracksound"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local web app for acoustic geolocation of audio and video recordings"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -31,5 +31,5 @@ export function isTypingTarget(t: EventTarget | null): boolean {
 export function isInteractiveTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el || !el.closest) return false;
-  return !!el.closest('[role="checkbox"], [role="switch"], [role="radio"], [role="option"], [role="slider"]');
+  return !!el.closest('[role="checkbox"], [role="switch"], [role="radio"], [role="option"], [role="slider"], [role="tab"], [role="menuitem"]');
 }

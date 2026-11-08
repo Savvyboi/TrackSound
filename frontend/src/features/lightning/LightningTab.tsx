@@ -116,7 +116,7 @@ function DetectSection() {
               <span className="w-20 text-xs text-fg-muted">Min. gap</span>
               <NumberInput value={gap} onCommit={(v) => v != null && setGap(v)} min={0.5} max={120} step={1} suffix="s" className="w-24" allowEmpty={false} />
               <div className="flex-1" />
-              <Button size="sm" variant="primary" icon={<Radio />} onClick={() => go("detect-thunder", { sensitivity: sens, min_gap_s: gap }, "thunder onsets")}>
+              <Button size="sm" variant="primary" icon={<Radio />} disabled={!recordingReady(c)} onClick={() => go("detect-thunder", { sensitivity: sens, min_gap_s: gap }, "thunder onsets")}>
                 Detect thunder
               </Button>
             </div>

@@ -144,6 +144,7 @@ function Shortcuts({ caseId }: { caseId: string }) {
       } else if (k === "0") {
         fitAll();
       } else if (k === "ArrowLeft" || k === "ArrowRight") {
+        if (isInteractiveTarget(e.target)) return; // sliders, radios and tabs use the arrows themselves
         e.preventDefault();
         const span = s.view.t1 - s.view.t0;
         panTime((k === "ArrowLeft" ? -1 : 1) * span * (e.shiftKey ? 0.5 : 0.1));

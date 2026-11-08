@@ -49,13 +49,16 @@ export function CatalogueSection() {
   const [src, setSrc] = useState<Src>("glm");
   const [fetching, setFetching] = useState<"glm" | "usgs" | null>(null);
   const [types, setTypes] = useState<string[]>(() => USGS_TYPES.filter((t) => t.on).map((t) => t.type));
-  const win = useMemo(() => (src === "csv" ? null : defaultWindow(c, src)), [c, src]);
+  const win = src === "csv" ? null : defaultWindow(c, src);
+  // reset the typed window only when the default itself changes, not on every case refetch
+  const winKey = win ? `${win[0]}-${win[1]}` : "";
   const [t0, setT0] = useState("");
   const [t1, setT1] = useState("");
   useEffect(() => {
     setT0(win ? toUtcInput(win[0]) : "");
     setT1(win ? toUtcInput(win[1]) : "");
-  }, [win]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winKey]);
   const a = t0 ? fromUtcInput(t0) : null;
   const b = t1 ? fromUtcInput(t1) : null;
   const span = a != null && b != null ? b - a : null;

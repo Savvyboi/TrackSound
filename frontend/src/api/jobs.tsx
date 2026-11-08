@@ -77,13 +77,20 @@ export function invalidateForJob(qc: QueryClient, job: Job) {
   else void qc.invalidateQueries({ queryKey: qk.case(cid) });
 }
 
-function summarise(job: Job): string | undefined {
+/** What a finished job produced ("12 found"), when its result says. */
+export function resultSummary(job: Job): string | undefined {
   const r = job.result;
   if (r && typeof r === "object") {
     if (typeof r.count === "number") return `${r.count} found`;
     if (typeof r.n_flights === "number") return `${r.n_flights} prop flights`;
     if (r.nominal_hz !== undefined) return r.nominal_hz ? `Mains hum at ${r.nominal_hz} Hz` : "No mains hum found";
   }
+  return undefined;
+}
+
+function summarise(job: Job): string | undefined {
+  const done = resultSummary(job);
+  if (done) return done;
   if (job.message && !["Done", "Running", "Queued"].includes(job.message)) return job.message;
   return undefined;
 }

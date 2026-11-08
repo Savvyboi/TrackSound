@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleAlert, CircleSlash, Clock, ListChecks, X } from "lucide-react";
-import { cancelJob, isActive, jobLabel } from "../../api/jobs";
+import { cancelJob, isActive, jobLabel, resultSummary } from "../../api/jobs";
 import { useCaseJobs } from "../../api/queries";
 import type { Job } from "../../api/types";
 import { IconButton } from "../../components/ui/Button";
@@ -96,7 +96,14 @@ function JobRow({ job }: { job: Job }) {
         </div>
         {running && <ProgressBar className="mt-1.5" value={job.progress} indeterminate={job.status === "queued"} />}
         <div className={cn("mt-1 line-clamp-2 text-2xs", job.status === "error" ? "text-danger" : "text-fg-muted")}>
-          {job.status === "error" ? job.error || job.message : job.message}
+          {job.status === "error"
+            ? job.error || job.message
+            : job.status === "done"
+              ? // the message is the last step ("Saving"): say how it ended instead
+                (resultSummary(job) ?? (elapsed > 0 ? `Done in ${fmtDuration(elapsed)}` : "Done"))
+              : job.status === "cancelled"
+                ? "Cancelled"
+                : job.message}
         </div>
       </div>
       {running && (

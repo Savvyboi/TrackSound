@@ -158,6 +158,7 @@ export function MapPanel() {
         land: effective === "plain",
         enfGrid: layers.enfGrid,
         region: layers.region,
+        draft: true,
         aHeat: layers.aircraftHeat,
         flights: layers.flights,
         cand: layers.candidates,
@@ -394,6 +395,12 @@ export function MapPanel() {
     };
     const move = (e: MapMouseEvent) => {
       if (mapTool !== "region" || !start) return;
+      // the button was released outside the map: drop the half-drawn rectangle
+      if ((e.originalEvent.buttons & 1) === 0) {
+        start = null;
+        draft(null);
+        return;
+      }
       draft(normalizeBBox({ lat: start.lat, lon: start.lng }, { lat: e.lngLat.lat, lon: e.lngLat.lng }));
     };
     const up = (e: MapMouseEvent) => {
@@ -438,6 +445,7 @@ export function MapPanel() {
       map.off("mousemove", move);
       map.off("mouseup", up);
       map.off("click", click);
+      draft(null);
       map.dragPan.enable();
       map.boxZoom.enable();
       map.doubleClickZoom.enable();

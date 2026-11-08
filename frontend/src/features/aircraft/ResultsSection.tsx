@@ -301,7 +301,7 @@ function CandidateDetail({ s, k }: { s: AircraftSearch; k: AircraftCandidate }) 
                 onClick={() => ws.set({ flightIdx: ws.get().flightIdx === f.flight_idx ? null : f.flight_idx })}
                 className="flex items-center gap-2 rounded-md border border-line bg-surface-2 px-2 py-1.5 text-left text-xs hover:border-line-strong"
               >
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-[5px] bg-[#67e8f9]/15 px-1 text-[10px] font-bold text-[#67e8f9] tnum">
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-[5px] bg-[#0891b2]/12 px-1 text-[10px] font-bold text-[#0e7490] tnum dark:bg-[#67e8f9]/15 dark:text-[#67e8f9]">
                   {numbers.get(f.event_id) ?? "?"}
                 </span>
                 <span className="min-w-0 flex-1">
