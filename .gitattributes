@@ -1,0 +1,4 @@
+# The web UI is built from frontend/ and committed; CI rebuilds it on Linux and requires identical
+# bytes. Keep the sources LF on every OS and store the build output exactly as built.
+frontend/** text=auto eol=lf
+backend/src/tracksound/web/** -text
