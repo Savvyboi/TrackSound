@@ -34,7 +34,9 @@ export function describeDetail(detail: unknown): string {
           const loc = Array.isArray((d as { loc?: unknown[] }).loc)
             ? ((d as { loc: unknown[] }).loc.filter((x) => x !== "body").join("."))
             : "";
-          return loc ? `${loc}: ${(d as { msg: string }).msg}` : String((d as { msg: string }).msg);
+          // pydantic prefixes our own messages with "Value error, "
+          const msg = String((d as { msg: string }).msg).replace(/^Value error, /, "");
+          return loc ? `${loc}: ${msg}` : msg;
         }
         return String(d);
       })

@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 import shutil
 import time
+from datetime import date as date_cls
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -44,8 +45,27 @@ class BBox(BaseModel):
         return self
 
 
+# times outside this range are typos (a half-typed year) rather than real recordings
+EARLIEST_UTC = -2208988800.0     # 1900-01-01
+LATEST_UTC = 4102444800.0        # 2100-01-01
+
+
+def _clean_name(v):
+    if v is None:
+        return v
+    v = v.strip()
+    if not v:
+        raise ValueError("the case name can't be empty")
+    return v[:200]
+
+
 class CaseCreate(BaseModel):
     name: str = "Untitled case"
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v):
+        return _clean_name(v)
 
 
 class CasePatch(BaseModel):
@@ -59,11 +79,31 @@ class CasePatch(BaseModel):
     start_utc_source: Literal["user", "aircraft", "lightning", "enf", "alerts"] | None = None
     temperature_c: float | None = Field(default=None, ge=-60, le=60)
 
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v):
+        return _clean_name(v)
+
     @field_validator("date")
     @classmethod
     def _date(cls, v):
-        if v is not None and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+        if v is None:
+            return v
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
             raise ValueError("date must be YYYY-MM-DD")
+        try:
+            d = date_cls.fromisoformat(v)
+        except ValueError:
+            raise ValueError(f"{v} is not a real calendar date")
+        if not 1900 <= d.year < 2100:
+            raise ValueError(f"the year {d.year} is outside 1900-2099")
+        return v
+
+    @field_validator("start_utc")
+    @classmethod
+    def _start(cls, v):
+        if v is not None and not (EARLIEST_UTC <= v < LATEST_UTC):
+            raise ValueError("the start time must fall between 1900 and 2099")
         return v
 
     @field_validator("countries")
@@ -121,11 +161,22 @@ def patch_case(case_id: str, body: CasePatch, store: Store = Depends(get_store))
 
 @router.delete("/cases/{case_id}", status_code=204)
 def delete_case(case_id: str, store: Store = Depends(get_store), jobs: JobManager = Depends(get_jobs)):
-    for j in jobs.list(case_id):
-        if j["status"] in ("queued", "running"):
-            jobs.cancel(j["id"])
-    store.delete_case(case_id)
-    return Response(status_code=204)
+    store.get_case(case_id)                                   # 404 before cancelling anything
+    active = [j["id"] for j in jobs.list(case_id) if j["status"] in ("queued", "running")]
+    for jid in active:
+        jobs.cancel(jid)
+    # a cancelled job stops at its next checkpoint; its files stay open until then (and Windows
+    # won't delete open files), so wait for it, then retry briefly while handles close
+    deadline = time.time() + 60
+    while time.time() < deadline and any((jobs.get(j) or {}).get("status") in ("queued", "running") for j in active):
+        time.sleep(0.2)
+    for attempt in range(20):
+        try:
+            store.delete_case(case_id)
+            return Response(status_code=204)
+        except PermissionError:
+            time.sleep(0.25)
+    raise HTTPException(409, "the case's files are still in use by a running job; try again in a moment")
 
 
 # ---- recording ----------------------------------------------------------------------------

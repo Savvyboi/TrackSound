@@ -35,7 +35,9 @@ import { INTERACTIVE_LAYERS, newSyncState, syncOverlays, type OverlayData } from
 import { registerMap } from "./registry";
 import { locationLabel } from "../alerts/AlertsTab";
 
-setWorkerUrl(workerUrl);
+// the query string is a fresh cache key: servers before 0.2.1 sent this file as text/plain on
+// Windows and browsers may have cached that broken response under the same name
+setWorkerUrl(`${workerUrl}?v=2`);
 
 export function MapPanel() {
   const c = useCaseData();

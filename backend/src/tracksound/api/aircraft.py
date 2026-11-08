@@ -1,6 +1,8 @@
 """Aircraft source API: prop Doppler events, ADS-B flights, location searches (docs/API.md)."""
 from __future__ import annotations
 
+import math
+import threading
 import time
 from typing import Literal
 
@@ -192,9 +194,34 @@ def detect(case_id: str, body: DetectBody, store: Store = Depends(get_store), jo
         from dopplertrack.tracks import detect_events
         ctx.progress(0.01, "Loading spectrogram")
         sp = spectrogram.load(store.spectrogram_path(case_id))
-        found = detect_events(sp, body.band[0], body.band[1], c=c, harmonics=body.harmonics, top=body.top,
-                              window_s=body.window_s,
-                              progress=lambda k, n: ctx.progress(0.02 + 0.93 * k / n, f"Scanning window {k} of {n}"))
+        n_win = len(np.arange(sp.t[0], max(sp.t[-1] - body.window_s, sp.t[0]) + 1e-9, 120.0))
+        real = threading.Event()
+
+        def on_window(k: int, n: int) -> None:
+            real.set()
+            ctx.progress(0.02 + 0.93 * k / n, f"Scanning window {k} of {n}")
+
+        # the windows run in parallel and report all at once near the end: until then, show an
+        # estimate that keeps moving (it slows down and never claims more than 80%)
+        def heartbeat() -> None:
+            t_start = time.time()
+            tau = 40.0 + 6.0 * n_win
+            while not real.wait(2.0):
+                el = time.time() - t_start
+                frac = 0.02 + 0.78 * (1.0 - math.exp(-el / tau))
+                try:
+                    ctx.progress(frac, f"Scanning {n_win} windows in parallel ({int(el // 60)}:{int(el % 60):02d} so far)")
+                except Exception:  # noqa: BLE001 - cancelled or finished: stop quietly
+                    return
+
+        hb = threading.Thread(target=heartbeat, daemon=True)
+        hb.start()
+        try:
+            found = detect_events(sp, body.band[0], body.band[1], c=c, harmonics=body.harmonics, top=body.top,
+                                  window_s=body.window_s, progress=on_window)
+        finally:
+            real.set()
+            hb.join(timeout=5)
         ctx.progress(0.97, "Saving")
         with store.lock(case_id):
             keep = [e for e in _events(store, case_id) if e["origin"] == "manual" or e["status"] == "accepted"]

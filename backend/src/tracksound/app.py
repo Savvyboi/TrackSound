@@ -15,6 +15,25 @@ from .jobs import JobManager
 from .store import NotFound, Store
 
 
+# Content types for the web UI, set explicitly: Python guesses from the Windows registry, which
+# often says text/plain for .mjs (or .js), and browsers refuse to run a script served that way
+# (the map's worker is an .mjs file, so the map stayed blank).
+WEB_TYPES = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".svg": "image/svg+xml",
+    ".png": "image/png",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".wasm": "application/wasm",
+    ".map": "application/json",
+}
+
+
 def web_dir() -> Path | None:
     """The built web UI: $TRACKSOUND_WEB, or tracksound/web (where `npm run build` writes it, and
     what the wheel and the standalone apps ship), or an old-style frontend/dist checkout."""
@@ -80,8 +99,13 @@ def create_app(settings: Settings | None = None, job_workers: int = 3) -> FastAP
                 return JSONResponse({"detail": "not found"}, status_code=404)
             f = (web / path).resolve()
             if path and f.is_file() and web.resolve() in f.parents:
-                return FileResponse(f)
-            return FileResponse(web / "index.html")
+                headers = {"Cache-Control": "public, max-age=31536000, immutable"} if path.startswith("assets/") else None
+                return FileResponse(f, media_type=WEB_TYPES.get(f.suffix.lower()), headers=headers)
+            if path.startswith("assets/") or Path(path).suffix:
+                # a missing file, not a page: answering with index.html makes a stale script look like HTML
+                return JSONResponse({"detail": "not found"}, status_code=404)
+            # never cache the page itself, so a new version's assets are picked up after an update
+            return FileResponse(web / "index.html", media_type="text/html", headers={"Cache-Control": "no-cache"})
     else:
         @app.get("/", include_in_schema=False)
         async def no_ui():

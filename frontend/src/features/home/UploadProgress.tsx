@@ -83,7 +83,7 @@ export function UploadProgressCard({ c, view, className }: { c: Case; view: Uplo
           </div>
         </div>
         {!failed && <ProgressBar className="mt-2" value={view.progress} indeterminate={view.phase === "processing" && view.progress < 0.02} />}
-        <div className={cn("mt-1.5 truncate text-xs", failed ? "text-danger/90" : "text-fg-faint")}>
+        <div className={cn("mt-1.5 text-xs", failed ? "line-clamp-3 text-danger" : "truncate text-fg-faint")} title={failed ? view.detail : undefined}>
           {view.phase === "uploading" ? `Step 1 of 2 · ${view.detail}` : view.phase === "processing" ? `Step 2 of 2 · ${view.detail}` : view.detail}
         </div>
       </div>

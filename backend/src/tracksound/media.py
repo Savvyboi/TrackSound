@@ -46,6 +46,17 @@ def ffprobe_exe() -> str | None:
     return shutil.which("ffprobe")
 
 
+def _unreadable(stderr: str, path: str | Path | None = None) -> str:
+    """A plain message for a file ffmpeg can't open, with its reason minus paths and addresses."""
+    tail = next((ln.strip() for ln in reversed((stderr or "").splitlines()) if ln.strip()), "")
+    if path:
+        tail = tail.replace(str(path), "").replace(Path(path).name, "")
+    tail = re.sub(r"^(?:[A-Za-z]:)?[^:]*[\\/][^:]*:\s*", "", tail)      # "C:\...\original.mp3: Invalid data"
+    tail = re.sub(r"\[\w+ @ 0x?[0-9a-fA-F]+\]\s*", "", tail).strip(" :")
+    msg = "could not read this file: it may be damaged, or not an audio or video format TrackSound supports"
+    return f"{msg} ({tail[:160]})" if tail else msg
+
+
 def probe(path: str | Path) -> dict:
     """ffprobe-style information: ``{"format": {...}, "streams": [...]}``. Uses ffprobe when
     available, else parses ``ffmpeg -i``. Raises ValueError if the file can't be read."""
@@ -54,7 +65,7 @@ def probe(path: str | Path) -> dict:
         r = subprocess.run([exe, "-v", "error", "-print_format", "json", "-show_streams", "-show_format", str(path)],
                            capture_output=True, text=True, errors="replace", timeout=120)
         if r.returncode != 0:
-            raise ValueError(f"could not read the file: {r.stderr.strip()[:300]}")
+            raise ValueError(_unreadable(r.stderr, path))
         return json.loads(r.stdout or "{}")
     r = subprocess.run([ffmpeg_exe(), "-hide_banner", "-nostdin", "-i", str(path)],
                        capture_output=True, text=True, errors="replace", timeout=120)
@@ -125,6 +136,5 @@ def parse_ffmpeg_info(text: str) -> dict:
                     s["avg_frame_rate"] = f"{fps.group(1)}/1"
             streams.append(s)
     if not found:
-        tail = next((ln.strip() for ln in reversed(lines) if ln.strip()), "unknown format")
-        raise ValueError(f"could not read the file: {tail[:300]}")
+        raise ValueError(_unreadable("\n".join(lines)))
     return {"format": fmt, "streams": streams}

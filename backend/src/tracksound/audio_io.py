@@ -46,15 +46,25 @@ def probe(path: str | Path) -> dict:
 def decode_to_standard(src: str | Path, dst: str | Path, sr: int = STANDARD_SR) -> tuple[np.ndarray, int]:
     """Decode any ffmpeg-readable file to mono float32 at ``sr`` and write it to ``dst`` (WAV).
     Returns the samples too, so the caller can build the spectrogram without re-reading."""
-    cmd = [media.ffmpeg_exe(), "-v", "error", "-nostdin", "-i", str(src), "-vn", "-ac", "1", "-ar", str(sr),
-           "-f", "f32le", "-acodec", "pcm_f32le", "-"]
+    # ffmpeg writes the WAV itself: piping the samples through Python held two full copies of a
+    # long recording in memory at once
+    dst = Path(dst)
+    tmp = dst.with_name(dst.name + ".part")
+    cmd = [media.ffmpeg_exe(), "-v", "error", "-nostdin", "-y", "-i", str(src), "-vn", "-ac", "1", "-ar", str(sr),
+           "-acodec", "pcm_f32le", "-f", "wav", str(tmp)]
     r = subprocess.run(cmd, capture_output=True)
     if r.returncode != 0:
+        tmp.unlink(missing_ok=True)
         raise ValueError(f"ffmpeg could not decode the audio: {r.stderr.decode(errors='replace').strip()[:300]}")
-    x = np.frombuffer(r.stdout, dtype=np.float32).copy()
+    try:
+        x, _ = sf.read(str(tmp), dtype="float32", always_2d=False)
+    except Exception as e:  # noqa: BLE001 - an empty or unreadable result: no audio stream
+        tmp.unlink(missing_ok=True)
+        raise ValueError("the file has no audio samples") from e
     if len(x) == 0:
+        tmp.unlink(missing_ok=True)
         raise ValueError("the file has no audio samples")
-    sf.write(str(dst), x, sr, subtype="FLOAT")
+    tmp.replace(dst)
     return x, sr
 
 

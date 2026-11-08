@@ -32,6 +32,15 @@ class JobCancelled(Exception):
     """Raised inside a job when the user cancelled it."""
 
 
+def _error_text(e: Exception) -> str:
+    """What the user sees for a failed job. ValueErrors are our own plain-language messages
+    ("the file has no audio stream"); anything else keeps its type, which helps bug reports."""
+    if isinstance(e, ValueError) and str(e):
+        msg = str(e)
+        return msg[0].upper() + msg[1:]
+    return f"{type(e).__name__}: {e}"
+
+
 class JobContext:
     def __init__(self, manager: "JobManager", job_id: str):
         self._m = manager
@@ -112,7 +121,7 @@ class JobManager:
             self._update(jid, status="cancelled", message="Cancelled", finished_at=time.time())
         except Exception as e:  # noqa: BLE001 - every failure must land in the job document
             log.error("job %s failed:\n%s", jid, traceback.format_exc())
-            self._update(jid, status="error", error=f"{type(e).__name__}: {e}", message="Failed", finished_at=time.time())
+            self._update(jid, status="error", error=_error_text(e), message="Failed", finished_at=time.time())
         finally:
             if on_done:
                 try:

@@ -74,6 +74,11 @@ class Store:
         self.root = settings.cases_dir
         self._locks: dict[str, threading.RLock] = {}
         self._locks_guard = threading.Lock()
+        # deleted cases are moved here first; finish removing any a previous run left behind
+        self.trash = settings.data_dir / ".trash"
+        if self.trash.exists():
+            for old in self.trash.iterdir():
+                shutil.rmtree(old, ignore_errors=True)
 
     # ---- locking -------------------------------------------------------------------------
     def lock(self, case_id: str) -> threading.RLock:
@@ -185,6 +190,11 @@ class Store:
         d = self.case_dir(case_id)
         if not (d / "case.json").exists():
             raise NotFound(case_id)
-        shutil.rmtree(d)
+        # move the folder aside in one step, then remove it: if a file inside is still open
+        # (Windows refuses), nothing is touched and the case stays whole instead of half-deleted
+        self.trash.mkdir(parents=True, exist_ok=True)
+        gone = self.trash / f"{case_id}-{secrets.token_hex(4)}"
+        d.rename(gone)
+        shutil.rmtree(gone, ignore_errors=True)
         with self._locks_guard:
             self._locks.pop(case_id, None)
